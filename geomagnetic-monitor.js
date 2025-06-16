@@ -595,10 +595,16 @@ const geoMagApp = (function() {
             }
             
             if (data.Kp && data.Kp.values.length > 0) {
-                state.forecastData.timestamps = data.Kp.datetime.map(dt => formatLocalLabel(new Date(dt)));
+                // Procesar timestamps si no existen
+                if (state.forecastData.timestamps.length === 0) {
+                    state.forecastData.timestamps = data.Kp.datetime.slice(0, 24).map(dt => formatLocalLabel(new Date(dt)));
+                }
+                
                 state.forecastData.kpGFZ = data.Kp.values.slice(0, 24);
                 state.forecastData.kpStatus = data.Kp.status ? data.Kp.status.slice(0, 24) : [];
                 state.forecastData.dataQuality.Kp = data.Kp.metadata?.quality || 85;
+                
+                console.log('Kp GFZ procesado:', state.forecastData.kpGFZ.length, 'valores');
                 
                 state.validationResults.kpGFZ = {
                     status: state.forecastData.dataQuality.Kp > 85 ? 'valid' : 'warning',
@@ -1068,17 +1074,13 @@ const geoMagApp = (function() {
         
         if (state.currentDataSource === 'gfz' || state.currentDataSource === 'hybrid') {
             try {
-                console.log('Intentando cargar datos GFZ (HP30 y Kp)...');
+                console.log('Intentando cargar datos GFZ (HP30, Kp, ap, ap30)...');
                 results.gfz = await loadGFZMultiIndices();
                 console.log('Resultado GFZ:', results.gfz ? 'Exitoso' : 'Falló');
                 
-                if (state.forecastData.hp30.length > 0 && 
-                    !state.forecastData.ksaIndex && 
-                    state.forecastData.kpNoaa.length === 0 && 
-                    state.forecastData.kpGFZ.length === 0) {
-                    console.log('Usando HP30 como fuente principal (prioridad 3)');
-                    state.forecastData.kpGFZ = [...state.forecastData.hp30];
-                }
+                // NO sobrescribir kpGFZ con hp30 - mantener los datos separados
+                // Cada índice tiene su propósito específico
+                
             } catch (error) {
                 console.log('GFZ no disponible:', error.message);
             }
@@ -1153,13 +1155,16 @@ const geoMagApp = (function() {
         
         const datasets = [];
         
+        // Lógica simplificada: mostrar todos los datasets disponibles según el modo
+        
+        // PRIORIDAD 1: KSA EMBRACE
         if (state.forecastData.ksaData && state.forecastData.ksaData.values.length > 0) {
             const ksaArray = new Array(state.forecastData.timestamps.length).fill(null);
             for (let i = 0; i < state.forecastData.ksaData.values.length && i < ksaArray.length; i++) {
                 ksaArray[i] = state.forecastData.ksaData.values[i];
             }
             datasets.push({
-                label: 'KSA EMBRACE (Prioridad 1)',
+                label: 'KSA EMBRACE (P1)',
                 data: ksaArray,
                 borderColor: '#10b981',
                 backgroundColor: 'rgba(16, 185, 129, 0.1)',
@@ -1172,9 +1177,10 @@ const geoMagApp = (function() {
             });
         }
         
-        if (state.forecastData.kpNoaa.length > 0 && (!state.forecastData.ksaData || state.currentDataSource === 'legacy')) {
+        // PRIORIDAD 2: Kp NOAA - Mostrar siempre si está disponible
+        if (state.forecastData.kpNoaa.length > 0) {
             datasets.push({
-                label: 'Kp NOAA (Prioridad 2)',
+                label: 'Kp NOAA (P2)',
                 data: state.forecastData.kpNoaa,
                 borderColor: '#f59e0b',
                 backgroundColor: 'rgba(245, 158, 11, 0.1)',
@@ -1187,70 +1193,87 @@ const geoMagApp = (function() {
             });
         }
         
+        // PRIORIDAD 3: HP30 GFZ - Mostrar si no estamos en modo legacy
         if (state.forecastData.hp30.length > 0 && state.currentDataSource !== 'legacy') {
             datasets.push({
-                label: 'HP30 GFZ (Prioridad 3)',
+                label: 'HP30 GFZ (P3)',
                 data: state.forecastData.hp30,
                 borderColor: '#3b82f6',
-                borderWidth: 2,
-                borderDash: [5, 5],
+                backgroundColor: 'rgba(59, 130, 246, 0.1)',
+                borderWidth: 3,
                 tension: 0.4,
-                pointRadius: 2,
+                pointRadius: 3,
+                pointBackgroundColor: '#3b82f6',
                 yAxisID: 'y-kp',
                 order: 3
             });
         }
         
-        if (state.forecastData.kpGFZ.length > 0 && state.currentDataSource !== 'legacy' && 
-            !state.forecastData.ksaData && state.forecastData.kpNoaa.length === 0) {
-            datasets.push({
-                label: 'Kp GFZ (Prioridad 4)',
-                data: state.forecastData.kpGFZ,
-                borderColor: '#8b5cf6',
-                backgroundColor: 'rgba(139, 92, 246, 0.1)',
-                borderWidth: 2,
-                borderDash: [8, 4],
-                tension: 0.4,
-                pointRadius: 3,
-                pointBackgroundColor: '#8b5cf6',
-                yAxisID: 'y-kp',
-                order: 4
-            });
-        }
-        
-        if (state.forecastData.ap30.length > 0 && state.currentDataSource !== 'legacy') {
-            const maxAp30 = Math.max(...state.forecastData.ap30);
-            if (maxAp30 > 10) {
+        // PRIORIDAD 4: Kp GFZ - Mostrar si está disponible y no estamos en modo legacy
+        if (state.forecastData.kpGFZ.length > 0 && state.currentDataSource !== 'legacy') {
+            // Verificar que no sea una copia de otro dataset
+            const isUnique = !arraysEqual(state.forecastData.kpGFZ, state.forecastData.hp30) &&
+                           !arraysEqual(state.forecastData.kpGFZ, state.forecastData.kpNoaa);
+            
+            if (isUnique || datasets.length === 0) {
                 datasets.push({
-                    label: 'ap30 (nT)',
-                    data: state.forecastData.ap30,
-                    borderColor: '#64748b',
+                    label: 'Kp GFZ (P4)',
+                    data: state.forecastData.kpGFZ,
+                    borderColor: '#8b5cf6',
+                    backgroundColor: 'rgba(139, 92, 246, 0.1)',
                     borderWidth: 2,
-                    borderDash: [4, 2],
+                    borderDash: [8, 4],
                     tension: 0.4,
-                    pointRadius: 2,
-                    yAxisID: 'y-ap',
-                    hidden: true
+                    pointRadius: 3,
+                    pointBackgroundColor: '#8b5cf6',
+                    yAxisID: 'y-kp',
+                    order: 4
                 });
             }
         }
         
-        const kpBase = state.forecastData.ksaData?.values || state.forecastData.kpNoaa || 
-                      state.forecastData.hp30 || state.forecastData.kpGFZ;
+        // Dataset ap30 (escala derecha) - Mostrar si hay actividad
+        if (state.forecastData.ap30.length > 0 && state.currentDataSource !== 'legacy') {
+            datasets.push({
+                label: 'ap30 (nT)',
+                data: state.forecastData.ap30,
+                borderColor: '#64748b',
+                backgroundColor: 'rgba(100, 116, 139, 0.1)',
+                borderWidth: 2,
+                borderDash: [4, 2],
+                tension: 0.4,
+                pointRadius: 2,
+                yAxisID: 'y-ap',
+                hidden: false, // Mostrar por defecto
+                order: 5
+            });
+        }
+        
+        // Dataset Kp SAMA efectivo - siempre visible si hay algún dato Kp
+        const kpBase = state.forecastData.ksaData?.values || 
+                      state.forecastData.kpNoaa || 
+                      state.forecastData.hp30 || 
+                      state.forecastData.kpGFZ || [];
+                      
         if (kpBase && kpBase.length > 0) {
             const kpSAMA = kpBase.map(kp => kp ? kp * state.forecastData.samaFactor : null);
             datasets.push({
                 label: 'Kp Efectivo SAMA',
                 data: kpSAMA,
                 borderColor: '#ef4444',
+                backgroundColor: 'rgba(239, 68, 68, 0.05)',
                 borderWidth: 3,
                 borderDash: [10, 5],
                 tension: 0.4,
                 pointRadius: 3,
+                pointBackgroundColor: '#ef4444',
                 yAxisID: 'y-kp',
-                order: 0
+                order: 0 // Siempre al frente
             });
         }
+        
+        console.log('Datasets a graficar:', datasets.map(d => d.label));
+        console.log('Total datasets:', datasets.length);
         
         if (state.mainChart) {
             state.mainChart.data.labels = state.forecastData.timestamps;
@@ -1728,6 +1751,15 @@ const geoMagApp = (function() {
 
     // ================== FUNCIONES AUXILIARES ==================
     
+    function arraysEqual(a, b) {
+        if (!a || !b) return false;
+        if (a.length !== b.length) return false;
+        for (let i = 0; i < a.length; i++) {
+            if (a[i] !== b[i]) return false;
+        }
+        return true;
+    }
+    
     function interpolateNoaaData(noaaData, targetLength) {
         if (!noaaData || noaaData.length === 0) return [];
         
@@ -1797,6 +1829,16 @@ const geoMagApp = (function() {
         document.getElementById('chartLoading').style.display = 'flex';
         document.getElementById('systemStatus').textContent = 'Conectando con fuentes...';
         
+        // Limpiar datos anteriores para evitar mezclas
+        console.log('Limpiando datos anteriores...');
+        state.forecastData.kpGFZ = [];
+        state.forecastData.kpNoaa = [];
+        state.forecastData.hp30 = [];
+        state.forecastData.ap = [];
+        state.forecastData.ap30 = [];
+        state.forecastData.ksaData = null;
+        state.forecastData.ksaIndex = null;
+        
         try {
             // Actualizar estado mientras carga
             setTimeout(() => {
@@ -1812,8 +1854,10 @@ const geoMagApp = (function() {
                 throw new Error('No se pudieron cargar los datos');
             }
             
-            const currentKp = state.forecastData.kpCurrent || state.forecastData.kpGFZ[0] || 
-                            state.forecastData.kpNoaa[0] || 0;
+            const currentKp = state.forecastData.ksaIndex || 
+                            state.forecastData.kpNoaa[0] || 
+                            state.forecastData.hp30[0] || 
+                            state.forecastData.kpGFZ[0] || 0;
             document.getElementById('currentKp').textContent = currentKp.toFixed(2);
             
             updateMultiIndexPanel();
