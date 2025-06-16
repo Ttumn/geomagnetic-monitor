@@ -767,11 +767,15 @@ const geoMagApp = (function() {
                     if (!nums || nums.length < 4) continue;
                     const day = parseInt(nums[1]);
                     if (day === now.getUTCDate()) {
-                        const values = nums.slice(3, 27).map(v => parseInt(v));
+                        const values = nums.slice(3, 27).map(v => {
+                            if (v.length > 4) return NaN;
+                            const n = parseInt(v, 10);
+                            return Math.abs(n) <= 1000 ? n : NaN;
+                        });
                         const hour = now.getUTCHours();
                         if (hour < values.length) {
                             const val = values[hour];
-                            if (!isNaN(val) && val !== 9999) {
+                            if (!isNaN(val) && val !== 9999 && Math.abs(val) <= 1000) {
                                 latestDst = val;
                             }
                         }
