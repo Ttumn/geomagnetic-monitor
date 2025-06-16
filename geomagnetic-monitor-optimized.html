@@ -1,0 +1,887 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Monitor Geomagnético Avanzado - Multi-índices GFZ</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/3.9.1/chart.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/chartjs-plugin-annotation/2.0.1/chartjs-plugin-annotation.min.js"></script>
+    <style>
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, sans-serif;
+            background: linear-gradient(135deg, #0f172a 0%, #1e293b 50%, #334155 100%);
+            color: #f1f5f9;
+            min-height: 100vh;
+            padding: 10px;
+        }
+        .container {
+            max-width: 1600px;
+            margin: 0 auto;
+            background: rgba(15, 23, 42, 0.8);
+            backdrop-filter: blur(20px);
+            border-radius: 24px;
+            padding: 20px;
+            box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.5);
+            border: 1px solid rgba(148, 163, 184, 0.1);
+        }
+        .header {
+            text-align: center;
+            margin-bottom: 30px;
+            position: relative;
+        }
+        .title {
+            font-size: clamp(1.8rem, 4vw, 2.5rem);
+            font-weight: 800;
+            margin-bottom: 10px;
+            background: linear-gradient(135deg, #10b981 0%, #3b82f6 50%, #8b5cf6 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+        }
+        .subtitle {
+            font-size: clamp(1rem, 2.5vw, 1.2rem);
+            color: #94a3b8;
+            margin-bottom: 20px;
+        }
+        .argentina-flag {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            background: linear-gradient(90deg, #74acdf 33%, #ffffff 33%, #ffffff 66%, #74acdf 66%);
+            padding: 6px 16px;
+            border-radius: 20px;
+            font-size: 0.9rem;
+            color: #1e293b;
+            font-weight: 600;
+            margin-top: 10px;
+        }
+        
+        /* Sistema de validación mejorado */
+        .sama-analysis-panel {
+            background: linear-gradient(135deg, rgba(139, 92, 246, 0.1) 0%, rgba(30, 41, 59, 0.3) 100%);
+            border: 1px solid rgba(139, 92, 246, 0.3);
+            border-radius: 20px;
+            padding: 20px;
+            margin-bottom: 25px;
+        }
+        .sama-header {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            margin-bottom: 20px;
+        }
+        .sama-title {
+            font-size: 1.3rem;
+            font-weight: 700;
+            flex: 1;
+        }
+        .sama-factor {
+            background: rgba(139, 92, 246, 0.2);
+            padding: 8px 16px;
+            border-radius: 12px;
+            font-weight: 600;
+        }
+        .sama-metrics {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 15px;
+        }
+        .sama-metric {
+            background: rgba(30, 41, 59, 0.5);
+            border-radius: 12px;
+            padding: 15px;
+            border-left: 3px solid #8b5cf6;
+        }
+        .sama-metric-label {
+            font-size: 0.85rem;
+            color: #94a3b8;
+            margin-bottom: 8px;
+        }
+        .sama-metric-value {
+            font-size: 1.4rem;
+            font-weight: 700;
+            color: #f1f5f9;
+        }
+        .sama-metric-detail {
+            font-size: 0.8rem;
+            color: #cbd5e1;
+            margin-top: 4px;
+        }
+        
+        /* Sistema de validación mejorado */
+        .validation-panel {
+            background: rgba(30, 41, 59, 0.3);
+            border: 1px solid rgba(148, 163, 184, 0.1);
+            border-radius: 20px;
+            padding: 20px;
+            margin-bottom: 25px;
+        }
+        .validation-header {
+            font-size: 1.2rem;
+            font-weight: 700;
+            margin-bottom: 15px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        .validation-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+            gap: 15px;
+        }
+        .validation-item {
+            background: rgba(30, 41, 59, 0.5);
+            border: 1px solid rgba(148, 163, 184, 0.2);
+            border-radius: 12px;
+            padding: 15px;
+            position: relative;
+            overflow: hidden;
+            transition: all 0.3s ease;
+        }
+        .validation-item::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 4px;
+            height: 100%;
+            transition: all 0.3s ease;
+        }
+        .validation-item.valid::before { background: #10b981; }
+        .validation-item.warning::before { background: #f59e0b; }
+        .validation-item.error::before { background: #ef4444; }
+        .validation-item.loading::before { 
+            background: #3b82f6; 
+            animation: pulse 1.5s infinite;
+        }
+        .validation-item.pending::before { background: #64748b; }
+        .validation-item.cached::before { background: #8b5cf6; }
+        
+        .validation-source {
+            font-weight: 600;
+            font-size: 1rem;
+            margin-bottom: 8px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 8px;
+        }
+        .source-name {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        .retry-button {
+            background: rgba(59, 130, 246, 0.2);
+            border: 1px solid rgba(59, 130, 246, 0.4);
+            color: #3b82f6;
+            padding: 4px 8px;
+            border-radius: 6px;
+            font-size: 0.75rem;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            display: none;
+        }
+        .retry-button:hover {
+            background: rgba(59, 130, 246, 0.3);
+            transform: translateY(-1px);
+        }
+        .validation-item.error .retry-button,
+        .validation-item.timeout .retry-button {
+            display: inline-flex;
+            align-items: center;
+            gap: 4px;
+        }
+        .validation-metrics {
+            display: flex;
+            flex-direction: column;
+            gap: 6px;
+        }
+        .metric-row {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            font-size: 0.85rem;
+        }
+        .metric-label {
+            color: #94a3b8;
+        }
+        .metric-value {
+            font-weight: 600;
+            font-family: 'Courier New', monospace;
+        }
+        .confidence-bar {
+            width: 100%;
+            height: 4px;
+            background: rgba(148, 163, 184, 0.2);
+            border-radius: 2px;
+            margin-top: 10px;
+            overflow: hidden;
+            position: relative;
+        }
+        .confidence-fill {
+            height: 100%;
+            transition: width 0.5s ease;
+            border-radius: 2px;
+        }
+        .loading-progress {
+            position: absolute;
+            top: 0;
+            left: 0;
+            height: 100%;
+            background: rgba(59, 130, 246, 0.3);
+            animation: loading-sweep 2s infinite;
+            display: none;
+        }
+        .validation-item.loading .loading-progress {
+            display: block;
+        }
+        @keyframes loading-sweep {
+            0% { width: 0; left: 0; }
+            50% { width: 30%; left: 70%; }
+            100% { width: 0; left: 100%; }
+        }
+        
+        /* Estados de tiempo */
+        .timing-info {
+            display: flex;
+            align-items: center;
+            gap: 4px;
+            font-size: 0.75rem;
+            color: #64748b;
+            margin-top: 6px;
+        }
+        .timing-icon {
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+            background: currentColor;
+            display: inline-block;
+            animation: pulse 2s infinite;
+        }
+        
+        /* Mantener estilos existentes */
+        .status-bar {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 15px;
+            margin-bottom: 25px;
+        }
+        .status-card {
+            background: rgba(30, 41, 59, 0.5);
+            border: 1px solid rgba(148, 163, 184, 0.2);
+            border-radius: 16px;
+            padding: 16px;
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            transition: all 0.3s ease;
+        }
+        .status-card:hover {
+            transform: translateY(-2px);
+            border-color: rgba(148, 163, 184, 0.4);
+            box-shadow: 0 10px 20px -5px rgba(0, 0, 0, 0.3);
+        }
+        .status-icon {
+            width: 40px;
+            height: 40px;
+            border-radius: 12px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1.4rem;
+        }
+        .status-online { background: rgba(16, 185, 129, 0.2); }
+        .status-warning { background: rgba(251, 191, 36, 0.2); }
+        .status-danger { background: rgba(239, 68, 68, 0.2); }
+        .status-info { flex: 1; }
+        .status-label {
+            font-size: 0.85rem;
+            color: #94a3b8;
+            margin-bottom: 4px;
+        }
+        .status-value {
+            font-size: 1.2rem;
+            font-weight: 700;
+        }
+        .main-grid {
+            display: grid;
+            grid-template-columns: 1fr 350px;
+            gap: 20px;
+            margin-bottom: 25px;
+        }
+        .chart-section {
+            background: rgba(30, 41, 59, 0.3);
+            border: 1px solid rgba(148, 163, 184, 0.1);
+            border-radius: 20px;
+            padding: 20px;
+        }
+        .chart-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 20px;
+            flex-wrap: wrap;
+            gap: 10px;
+        }
+        .chart-title {
+            font-size: 1.3rem;
+            font-weight: 700;
+            color: #f1f5f9;
+        }
+        .chart-controls {
+            display: flex;
+            gap: 10px;
+            flex-wrap: wrap;
+        }
+        .btn {
+            background: linear-gradient(135deg, #3b82f6 0%, #6366f1 100%);
+            border: none;
+            color: white;
+            padding: 8px 16px;
+            border-radius: 12px;
+            font-size: 0.9rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+        }
+        .btn:hover:not(:disabled) {
+            transform: translateY(-2px);
+            box-shadow: 0 10px 20px -5px rgba(59, 130, 246, 0.5);
+        }
+        .btn:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+        .btn-secondary {
+            background: rgba(148, 163, 184, 0.2);
+            border: 1px solid rgba(148, 163, 184, 0.3);
+        }
+        .btn-secondary:hover:not(:disabled) {
+            background: rgba(148, 163, 184, 0.3);
+            box-shadow: 0 10px 20px -5px rgba(148, 163, 184, 0.3);
+        }
+        .chart-container {
+            position: relative;
+            height: 400px;
+            margin-bottom: 20px;
+        }
+        .recommendation-panel {
+            background: rgba(30, 41, 59, 0.3);
+            border: 1px solid rgba(148, 163, 184, 0.1);
+            border-radius: 20px;
+            padding: 20px;
+            height: fit-content;
+        }
+        .recommendation-header {
+            font-size: 1.2rem;
+            font-weight: 700;
+            margin-bottom: 20px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        .drone-status {
+            background: rgba(30, 41, 59, 0.5);
+            border-radius: 16px;
+            padding: 20px;
+            margin-bottom: 20px;
+            text-align: center;
+        }
+        .drone-icon {
+            font-size: 4rem;
+            margin-bottom: 15px;
+        }
+        .drone-status-text {
+            font-size: 1.8rem;
+            font-weight: 800;
+            margin-bottom: 10px;
+        }
+        .drone-status-safe { color: #10b981; }
+        .drone-status-caution { color: #f59e0b; }
+        .drone-status-danger { color: #ef4444; }
+        .drone-recommendation {
+            font-size: 1rem;
+            color: #cbd5e1;
+            line-height: 1.6;
+        }
+        .risk-factors {
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+        }
+        .risk-item {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            padding: 12px 16px;
+            background: rgba(30, 41, 59, 0.5);
+            border-radius: 12px;
+            font-size: 0.95rem;
+        }
+        .risk-indicator {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            flex-shrink: 0;
+        }
+        .risk-low { background: #10b981; }
+        .risk-medium { background: #f59e0b; }
+        .risk-high { background: #ef4444; }
+        .data-sources {
+            background: rgba(30, 41, 59, 0.3);
+            border: 1px solid rgba(148, 163, 184, 0.1);
+            border-radius: 20px;
+            padding: 20px;
+            margin-bottom: 25px;
+        }
+        .source-grid {
+            display: grid;
+            grid-template-columns: 1fr;
+            gap: 15px;
+            margin-top: 15px;
+        }
+        .source-item {
+            padding: 16px;
+            background: rgba(30, 41, 59, 0.5);
+            border-radius: 12px;
+            transition: all 0.3s ease;
+            border-left: 4px solid transparent;
+        }
+        .source-item:hover {
+            background: rgba(30, 41, 59, 0.8);
+            transform: translateX(5px);
+        }
+        .source-title {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            font-weight: 700;
+            font-size: 1.1rem;
+            margin-bottom: 8px;
+        }
+        .source-flag {
+            font-size: 1.2rem;
+        }
+        .source-desc {
+            color: #cbd5e1;
+            line-height: 1.6;
+            font-size: 0.95rem;
+        }
+        .legend {
+            display: flex;
+            justify-content: center;
+            gap: 20px;
+            flex-wrap: wrap;
+            margin-top: 15px;
+        }
+        .legend-item {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            font-size: 0.9rem;
+            color: #94a3b8;
+        }
+        .legend-color {
+            width: 20px;
+            height: 3px;
+            border-radius: 2px;
+        }
+        .info-panel {
+            background: rgba(30, 41, 59, 0.3);
+            border: 1px solid rgba(148, 163, 184, 0.1);
+            border-radius: 20px;
+            padding: 20px;
+            margin-bottom: 25px;
+        }
+        .info-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 15px;
+            margin-top: 15px;
+        }
+        .info-card {
+            background: rgba(30, 41, 59, 0.5);
+            border: 1px solid rgba(148, 163, 184, 0.2);
+            border-radius: 12px;
+            padding: 16px;
+            text-align: center;
+        }
+        .info-label {
+            font-size: 0.85rem;
+            color: #94a3b8;
+            margin-bottom: 8px;
+        }
+        .info-value {
+            font-size: 1.8rem;
+            font-weight: 800;
+            color: #f1f5f9;
+        }
+        .info-subtitle {
+            font-size: 0.8rem;
+            color: #64748b;
+            margin-top: 4px;
+        }
+        .scale-bar {
+            display: flex;
+            height: 40px;
+            border-radius: 20px;
+            overflow: hidden;
+            margin: 20px 0;
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.3);
+        }
+        .scale-segment {
+            flex: 1;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: 600;
+            font-size: 0.9rem;
+            color: white;
+            transition: all 0.3s ease;
+            cursor: pointer;
+        }
+        .scale-segment:hover {
+            transform: scaleY(1.1);
+            z-index: 1;
+        }
+        .kp-0 { background: #10b981; }
+        .kp-1 { background: #34d399; }
+        .kp-2 { background: #6ee7b7; }
+        .kp-3 { background: #fbbf24; }
+        .kp-4 { background: #f59e0b; }
+        .kp-5 { background: #fb923c; }
+        .kp-6 { background: #ef4444; }
+        .kp-7 { background: #dc2626; }
+        .kp-8 { background: #991b1b; }
+        .kp-9 { background: #7c2d12; }
+        .loading-overlay {
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(15, 23, 42, 0.9);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            border-radius: 20px;
+            z-index: 10;
+        }
+        .spinner {
+            width: 40px;
+            height: 40px;
+            border: 4px solid rgba(59, 130, 246, 0.2);
+            border-left: 4px solid #3b82f6;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+        }
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+        .pulse {
+            animation: pulse 2s infinite;
+        }
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.6; }
+        }
+        .footer {
+            text-align: center;
+            padding: 20px;
+            color: #64748b;
+            font-size: 0.9rem;
+        }
+        .footer a {
+            color: #3b82f6;
+            text-decoration: none;
+        }
+        .footer a:hover {
+            text-decoration: underline;
+        }
+        .gfz-console {
+            margin: 20px 0;
+            padding: 15px;
+            background: rgba(30, 41, 59, 0.3);
+            border: 1px solid rgba(148, 163, 184, 0.1);
+            border-radius: 8px;
+        }
+        .gfz-console button {
+            margin-bottom: 10px;
+        }
+        .gfz-console pre {
+            background: #0f172a;
+            color: #f1f5f9;
+            padding: 10px;
+            border-radius: 6px;
+            max-height: 200px;
+            overflow-y: auto;
+            white-space: pre-wrap;
+            font-family: monospace;
+            font-size: 0.85rem;
+        }
+        @media (max-width: 1024px) {
+            .main-grid {
+                grid-template-columns: 1fr;
+            }
+            .recommendation-panel {
+                order: -1;
+            }
+        }
+        @media (max-width: 768px) {
+            body {
+                padding: 5px;
+            }
+            .container {
+                padding: 15px;
+                border-radius: 16px;
+            }
+            .status-bar {
+                grid-template-columns: 1fr;
+                gap: 10px;
+            }
+            .chart-container {
+                height: 300px;
+            }
+            .info-grid {
+                grid-template-columns: 1fr 1fr;
+            }
+            .source-grid {
+                grid-template-columns: 1fr;
+            }
+            .chart-header {
+                flex-direction: column;
+                align-items: stretch;
+            }
+            .chart-controls {
+                justify-content: center;
+            }
+            .scale-bar {
+                height: 30px;
+            }
+            .scale-segment {
+                font-size: 0.7rem;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1 class="title">🛸 Monitor Geomagnético Avanzado para Drones</h1>
+            <p class="subtitle">Sistema Integrado de Predicción con Análisis SAMA Mejorado</p>
+            <div class="argentina-flag">🇦🇷 Optimizado para Argentina y Sudamérica</div>
+        </div>
+
+        <!-- Panel de análisis SAMA mejorado -->
+        <div class="sama-analysis-panel">
+            <div class="sama-header">
+                <h3 class="sama-title">🌍 Análisis de la Anomalía Magnética del Atlántico Sur (SAMA)</h3>
+                <div class="sama-factor">Factor: <span id="samaFactorValue">×1.0</span></div>
+            </div>
+            <div class="sama-metrics">
+                <div class="sama-metric">
+                    <div class="sama-metric-label">Índice Kp Efectivo</div>
+                    <div class="sama-metric-value" id="kpEffective">--</div>
+                    <div class="sama-metric-detail">Kp real × factor SAMA</div>
+                </div>
+                <div class="sama-metric">
+                    <div class="sama-metric-label">Amplitud ap SAMA</div>
+                    <div class="sama-metric-value" id="apSama">-- nT</div>
+                    <div class="sama-metric-detail">Perturbación amplificada</div>
+                </div>
+                <div class="sama-metric">
+                    <div class="sama-metric-label">Riesgo Combinado</div>
+                    <div class="sama-metric-value" id="samaRisk">BAJO</div>
+                    <div class="sama-metric-detail">Basado en multi-índices</div>
+                </div>
+                <div class="sama-metric">
+                    <div class="sama-metric-label">Predicción 3h</div>
+                    <div class="sama-metric-value" id="samaPrediction">--</div>
+                    <div class="sama-metric-detail">Tendencia HP30/ap30</div>
+                </div>
+            </div>
+        </div>
+
+        <div class="status-bar">
+            <div class="status-card">
+                <div class="status-icon status-online pulse">🟢</div>
+                <div class="status-info">
+                    <div class="status-label">Estado del Sistema</div>
+                    <div class="status-value" id="systemStatus">En línea</div>
+                </div>
+            </div>
+            <div class="status-card">
+                <div class="status-icon status-warning">⚡</div>
+                <div class="status-info">
+                    <div class="status-label">Índice Kp Actual</div>
+                    <div class="status-value" id="currentKp">--</div>
+                </div>
+            </div>
+            <div class="status-card">
+                <div class="status-icon status-warning">📡</div>
+                <div class="status-info">
+                    <div class="status-label">Precisión GPS</div>
+                    <div class="status-value" id="gpsAccuracy">--</div>
+                </div>
+            </div>
+            <div class="status-card">
+                <div class="status-icon status-online">🕐</div>
+                <div class="status-info">
+                    <div class="status-label">Última Actualización</div>
+                    <div class="status-value" id="lastUpdate">--:--</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Panel de Validación de Datos -->
+        <div class="validation-panel">
+            <h3 class="validation-header">🔍 Estado de Validación de Fuentes de Datos</h3>
+            <div class="validation-grid" id="validationGrid">
+                <!-- Se llena dinámicamente -->
+            </div>
+        </div>
+
+        <div class="main-grid">
+            <div class="chart-section">
+                <div class="chart-header">
+                    <h2 class="chart-title">📊 Pronóstico Integrado Multi-índice 72 Horas</h2>
+                    <div class="chart-controls">
+                        <button class="btn" onclick="geoMagApp.refreshData()">🔄 Actualizar</button>
+                        <button class="btn btn-secondary" onclick="geoMagApp.toggleAutoRefresh()">⏰ Auto: <span id="autoRefreshStatus">OFF</span></button>
+                        <button class="btn btn-secondary" onclick="geoMagApp.toggleDataSource()">📡 Fuente: <span id="dataSourceStatus">Híbrida</span></button>
+                    </div>
+                </div>
+                <div class="chart-container">
+                    <div class="loading-overlay" id="chartLoading"><div class="spinner"></div></div>
+                    <canvas id="mainChart"></canvas>
+                </div>
+                <div class="legend">
+                    <div class="legend-item"><div class="legend-color" style="background: #10b981;"></div><span>KSA EMBRACE (P1)</span></div>
+                    <div class="legend-item"><div class="legend-color" style="background: #f59e0b;"></div><span>Kp NOAA (P2)</span></div>
+                    <div class="legend-item"><div class="legend-color" style="background: #3b82f6;"></div><span>HP30 GFZ (P3)</span></div>
+                    <div class="legend-item"><div class="legend-color" style="background: #8b5cf6;"></div><span>Kp GFZ (P4)</span></div>
+                    <div class="legend-item"><div class="legend-color" style="background: #ef4444;"></div><span>Kp Efectivo SAMA</span></div>
+                </div>
+                <div class="scale-bar">
+                    <div class="scale-segment kp-0">0</div>
+                    <div class="scale-segment kp-1">1</div>
+                    <div class="scale-segment kp-2">2</div>
+                    <div class="scale-segment kp-3">3</div>
+                    <div class="scale-segment kp-4">4</div>
+                    <div class="scale-segment kp-5">5</div>
+                    <div class="scale-segment kp-6">6</div>
+                    <div class="scale-segment kp-7">7</div>
+                    <div class="scale-segment kp-8">8</div>
+                    <div class="scale-segment kp-9">9</div>
+                </div>
+            </div>
+            <div class="recommendation-panel">
+                <h3 class="recommendation-header"><span>🚁</span> Recomendación Operacional</h3>
+                <div class="drone-status" id="droneStatus">
+                    <div class="drone-icon">🛸</div>
+                    <div class="drone-status-text drone-status-safe" id="statusText">VUELO SEGURO</div>
+                    <div class="drone-recommendation" id="statusRecommendation">Condiciones óptimas para operaciones de agricultura de precisión</div>
+                </div>
+                <h4 style="margin: 20px 0 15px; font-size: 1.1rem;">Factores de Riesgo</h4>
+                <div class="risk-factors">
+                    <div class="risk-item"><div class="risk-indicator risk-low" id="gpsRisk"></div><span><strong>GPS:</strong> <span id="gpsRiskText">Precisión normal (±1m)</span></span></div>
+                    <div class="risk-item"><div class="risk-indicator risk-low" id="magRisk"></div><span><strong>Brújula:</strong> <span id="magRiskText">Sin interferencias</span></span></div>
+                    <div class="risk-item"><div class="risk-indicator risk-low" id="commRisk"></div><span><strong>Comunicaciones:</strong> <span id="commRiskText">Señal estable</span></span></div>
+                    <div class="risk-item"><div class="risk-indicator risk-low" id="samaRisk"></div><span><strong>SAMA:</strong> <span id="samaRiskText">Efecto mínimo</span></span></div>
+                    <div class="risk-item"><div class="risk-indicator risk-low" id="validationRisk"></div><span><strong>Validación:</strong> <span id="validationRiskText">Datos confiables</span></span></div>
+                </div>
+            </div>
+        </div>
+
+        <div class="info-panel">
+            <h3 style="font-size: 1.2rem; font-weight: 700; margin-bottom: 15px;">📈 Estadísticas del Pronóstico Multi-índice</h3>
+            <div class="info-grid">
+                <div class="info-card"><div class="info-label">Kp Máximo Esperado</div><div class="info-value" id="maxKp">--</div><div class="info-subtitle" id="maxKpTime">--</div></div>
+                <div class="info-card"><div class="info-label">ap Máximo (nT)</div><div class="info-value" id="maxAp">--</div><div class="info-subtitle" id="maxApTime">--</div></div>
+                <div class="info-card"><div class="info-label">Probabilidad Kp≥5</div><div class="info-value" id="stormProb">--%</div><div class="info-subtitle" id="stormRisk">--</div></div>
+                <div class="info-card"><div class="info-label">Ventana Óptima</div><div class="info-value" id="optimalWindow">--</div><div class="info-subtitle" id="optimalHours">--</div></div>
+            </div>
+            <h3 style="font-size: 1.1rem; font-weight: 700; margin: 20px 0 15px;">🌎 Datos Regionales Sudamérica</h3>
+            <div class="info-grid">
+                <div class="info-card"><div class="info-label">Índice DST (Kyoto)</div><div class="info-value" id="dstValue">-- nT</div><div class="info-subtitle" id="dstStatus">--</div></div>
+                <div class="info-card"><div class="info-label">Índice KSA (EMBRACE)</div><div class="info-value" id="ksaValue">--</div><div class="info-subtitle" id="ksaStatus">K Sudamericano</div></div>
+                <div class="info-card"><div class="info-label">Campo en Pilar</div><div class="info-value" id="pilField">-- nT</div><div class="info-subtitle" id="pilStatus">INTERMAGNET PIL</div></div>
+                <div class="info-card"><div class="info-label">Intensidad SAMA</div><div class="info-value" id="samaIntensity">23,000 nT</div><div class="info-subtitle" id="samaStatus">-22.7 nT/año</div></div>
+            </div>
+        </div>
+
+        <div class="data-sources">
+            <h3 style="font-size: 1.2rem; font-weight: 700; margin-bottom: 5px;">📑 Descripción de los Nuevos Índices GFZ</h3>
+            <div class="source-grid">
+                <div class="source-item" style="border-left-color: #f59e0b;">
+                    <div class="source-title">
+                        <span class="source-flag">ap</span>
+                        <span>Índice de Amplitud Planetaria</span>
+                    </div>
+                    <div class="source-desc">
+                        Equivalente lineal del índice Kp, medido en nanoteslas (nT). Representa la amplitud de las perturbaciones magnéticas.
+                        <br><strong>Ventaja para SAMA:</strong> Al ser lineal, permite cálculos más precisos del efecto amplificado en la anomalía.
+                        <br><strong>Conversión:</strong> Kp=4 ≈ 27 nT, Kp=5 ≈ 48 nT, Kp=6 ≈ 80 nT
+                        <br><strong>Uso:</strong> Mejor para estimar efectos cuantitativos en equipos electrónicos.
+                    </div>
+                </div>
+                <div class="source-item" style="border-left-color: #3b82f6;">
+                    <div class="source-title">
+                        <span class="source-flag">ap30</span>
+                        <span>Amplitud de 30 minutos</span>
+                    </div>
+                    <div class="source-desc">
+                        Versión de alta resolución temporal del índice ap, calculado cada 30 minutos.
+                        <br><strong>Importancia:</strong> Detecta cambios rápidos que el Kp de 3 horas podría promediar.
+                        <br><strong>Para drones:</strong> Crítico para detectar inicio de tormentas súbitas durante operaciones.
+                        <br><strong>SAMA:</strong> Las variaciones rápidas se amplifican más en la región de la anomalía.
+                    </div>
+                </div>
+                <div class="source-item" style="border-left-color: #8b5cf6;">
+                    <div class="source-title">
+                        <span class="source-flag">Ap</span>
+                        <span>Índice Ap diario</span>
+                    </div>
+                    <div class="source-desc">
+                        Promedio diario del índice ap, útil para planificación a mediano plazo.
+                        <br><strong>Aplicación:</strong> Ideal para programar operaciones de vuelo con días de anticipación.
+                        <br><strong>Clasificación:</strong> 0-7 (tranquilo), 8-15 (perturbado), 16-29 (activo), 30-49 (tormenta menor), ≥50 (tormenta mayor)
+                    </div>
+                </div>
+                <div class="source-item" style="border-left-color: #10b981;">
+                    <div class="source-title">
+                        <span class="source-flag">C9</span>
+                        <span>Clasificación de 9 niveles</span>
+                    </div>
+                    <div class="source-desc">
+                        Sistema de clasificación simplificado que divide la actividad en 9 niveles discretos.
+                        <br><strong>Ventaja:</strong> Más intuitivo para operadores no especializados.
+                        <br><strong>Correlación:</strong> C9=1-3 (seguro), C9=4-5 (precaución), C9≥6 (evitar vuelo)
+                        <br><strong>SAMA:</strong> En la región, considerar C9≥4 como umbral de precaución.
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="footer">
+            <p>Sistema con API GFZ unificada, multi-índices y análisis SAMA mejorado | Datos: GFZ Potsdam, NOAA/SWPC, INTERMAGNET, WDC Kyoto, EMBRACE | <a href="https://github.com/yourusername/geomagnetic-monitor" target="_blank">Código Fuente</a></p>
+        </div>
+
+        <div class="gfz-console">
+            <button class="btn" id="loadGFZButton">📥 Cargar HP30 y Kp (24h)</button>
+            <pre id="gfzOutput"></pre>
+        </div>
+    </div>
+
+    <script src="geomagnetic-monitor.js"></script>
+</body>
+</html>
