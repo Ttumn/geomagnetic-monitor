@@ -1,0 +1,42 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Monitor Geomagnético Móvil</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/3.9.1/chart.min.js"></script>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 0; padding: 10px; background:#0f172a; color:#f1f5f9; }
+        h1 { text-align:center; font-size:1.4rem; margin-bottom:10px; }
+        canvas { width:100%; height:200px; margin-bottom:5px; background:#1e293b; border-radius:8px; }
+        .chart-msg { text-align:center; font-size:0.8rem; color:#facc15; margin-bottom:15px; }
+        section { margin-bottom:20px; }
+        p { margin-top:5px; font-size:0.9rem; }
+    </style>
+</head>
+<body>
+    <h1>Monitor Geomagnético Móvil</h1>
+    <section>
+        <canvas id="ksaChart"></canvas>
+        <div id="ksaMsg" class="chart-msg"></div>
+    </section>
+    <section>
+        <canvas id="kpChart"></canvas>
+        <div id="kpMsg" class="chart-msg"></div>
+    </section>
+    <section>
+        <canvas id="hpChart"></canvas>
+        <div id="hpMsg" class="chart-msg"></div>
+    </section>
+    <section id="flightStatus" style="text-align:center;font-size:1.2rem;">Cargando datos...</section>
+
+    <section id="explanation">
+        <h2>¿Qué representan estos índices?</h2>
+        <p><strong>KSA (EMBRACE):</strong> Índice K Sudamericano. Máxima prioridad para la región.</p>
+        <p><strong>Kp NOAA:</strong> Pronóstico oficial del Space Weather Prediction Center de NOAA.</p>
+        <p><strong>HP30 GFZ:</strong> Índice de alta resolución (30 minutos) del Helmholtz Centre for Geosciences.</p>
+    </section>
+
+    <script src="mobile.js"></script>
+</body>
+</html>

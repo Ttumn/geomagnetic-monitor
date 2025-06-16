@@ -2038,11 +2038,28 @@ const geoMagApp = (function() {
         });
     }
 
+    function computeCurrentKp(state) {
+        const weights = { noaa: 0.6, ksa: 0.4 };
+        let sum = 0;
+        let weightSum = 0;
+        if (state.forecastData.kpNoaa.length > 0 && state.forecastData.kpNoaa[0] != null) {
+            sum += state.forecastData.kpNoaa[0] * weights.noaa;
+            weightSum += weights.noaa;
+        }
+        if (state.forecastData.ksaIndex != null) {
+            sum += state.forecastData.ksaIndex * weights.ksa;
+            weightSum += weights.ksa;
+        }
+        if (weightSum > 0) {
+            return sum / weightSum;
+        }
+        return state.forecastData.hp30[0] || state.forecastData.kpGFZ[0] || 0;
+    }
+
     function updateSAMAPanel() {
         const state = stateManager.getState();
         const currentIndices = {
-            Kp: state.forecastData.ksaIndex || state.forecastData.kpNoaa[0] || 
-                state.forecastData.hp30[0] || state.forecastData.kpGFZ[0],
+            Kp: computeCurrentKp(state),
             ap: state.forecastData.ap[0],
             Hp30: state.forecastData.hp30[0],
             ap30: state.forecastData.ap30[0],
@@ -2180,6 +2197,7 @@ const geoMagApp = (function() {
                 data: kpLower,
                 borderColor: 'rgba(239,68,68,0)',
                 backgroundColor: 'rgba(239,68,68,0.1)',
+                borderWidth: 0,
                 fill: false,
                 pointRadius: 0,
                 yAxisID: 'y-kp',
@@ -2190,6 +2208,7 @@ const geoMagApp = (function() {
                 data: kpUpper,
                 borderColor: 'rgba(239,68,68,0)',
                 backgroundColor: 'rgba(239,68,68,0.1)',
+                borderWidth: 0,
                 fill: '-1',
                 pointRadius: 0,
                 yAxisID: 'y-kp',
@@ -2218,8 +2237,7 @@ const geoMagApp = (function() {
     function updateDroneStatus() {
         const state = stateManager.getState();
         const samaFactor = state.forecastData.samaFactor;
-        const currentKp = state.forecastData.ksaIndex || state.forecastData.kpNoaa[0] || 
-                         state.forecastData.hp30[0] || state.forecastData.kpGFZ[0] || 0;
+        const currentKp = computeCurrentKp(state);
         const currentAp = state.forecastData.ap[0] || 0;
         const effectiveKp = currentKp * samaFactor;
         const effectiveAp = currentAp * samaFactor;
@@ -2260,8 +2278,7 @@ const geoMagApp = (function() {
     function updateRiskFactors() {
         const state = stateManager.getState();
         const samaFactor = state.forecastData.samaFactor;
-        const currentKp = (state.forecastData.ksaIndex || state.forecastData.kpNoaa[0] || 
-                          state.forecastData.hp30[0] || state.forecastData.kpGFZ[0] || 0) * samaFactor;
+        const currentKp = computeCurrentKp(state) * samaFactor;
         
         // Riesgo GPS
         const gpsRisk = document.getElementById('gpsRisk');
@@ -2473,8 +2490,7 @@ const geoMagApp = (function() {
             }
             
             const state = stateManager.getState();
-            const currentKp = state.forecastData.kpCurrent || state.forecastData.kpGFZ[0] || 
-                            state.forecastData.kpNoaa[0] || 0;
+            const currentKp = computeCurrentKp(state);
             domUpdater.update('currentKp', currentKp.toFixed(2));
             
             updateSAMAPanel();
