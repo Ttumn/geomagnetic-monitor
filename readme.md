@@ -1,193 +1,181 @@
-# Monitor Geomagnético Avanzado para Drones
+# Monitor Geomagnético Avanzado para Drones v3.0
 
-Sistema de monitoreo y predicción de actividad geomagnética optimizado para operaciones con drones en Sudamérica, con análisis especializado de la Anomalía Magnética del Atlántico Sur (SAMA).
+Sistema de monitoreo en tiempo real de condiciones geomagnéticas optimizado para operaciones de drones en Sudamérica, con análisis especial de la Anomalía Magnética del Atlántico Sur (SAMA).
 
-![Estado](https://img.shields.io/badge/estado-activo-brightgreen)
-![Versión](https://img.shields.io/badge/versión-2.0.0-blue)
-![Licencia](https://img.shields.io/badge/licencia-MIT-green)
+## 🌟 Características Principales
 
-## 🌍 Características Principales
+- **Multi-índice avanzado**: Integración de Kp, ap, Hp30, ap30, DST, KSA
+- **Análisis SAMA**: Factor de amplificación dinámico para la región
+- **Predicción 72 horas**: Pronóstico integrado de múltiples fuentes
+- **Validación en tiempo real**: Sistema de verificación de calidad de datos
+- **Interfaz adaptativa**: Diseño responsivo para escritorio y móvil
+- **Gestión de estado centralizada**: Prevención de condiciones de carrera
+- **Parsers robustos**: Resistente a cambios en formatos de datos externos
+- **Optimización de rendimiento**: Actualizaciones eficientes del DOM y gráficos
 
-- **Multi-índices en tiempo real**: Integración de datos de GFZ Potsdam, NOAA/SWPC, EMBRACE, WDC Kyoto e INTERMAGNET
-- **Análisis SAMA mejorado**: Factor de amplificación dinámico para la región de la Anomalía Magnética del Atlántico Sur
-- **Sistema de prioridades**: Jerarquía inteligente de fuentes de datos (KSA > NOAA > HP30 > Kp GFZ)
-- **Predicción 72 horas**: Pronóstico integrado con múltiples modelos
-- **Recomendaciones operacionales**: Sistema de alertas específico para drones
-- **Validación en tiempo real**: Monitoreo del estado y calidad de todas las fuentes de datos
+## 🚀 Uso Rápido
 
-## 📊 Índices Monitoreados
+### Opción 1: GitHub Pages
+Acceder directamente a: `https://[tu-usuario].github.io/geomagnetic-monitor/`
 
-### Prioridad 1-4 (Principales)
-- **KSA (EMBRACE)**: Índice K Sudamericano - Máxima prioridad para la región
-- **Kp NOAA**: Pronóstico oficial de NOAA/SWPC
-- **HP30 GFZ**: Índice de alta resolución (30 minutos)
-- **Kp GFZ**: Índice planetario de GFZ Potsdam
+### Opción 2: Uso Local
+1. Descargar todos los archivos del repositorio
+2. Abrir `index.html` en un navegador moderno
 
-### Índices de Amplitud
-- **ap/ap30**: Amplitud planetaria en nanoteslas
-- **Ap**: Promedio diario
-- **C9**: Clasificación simplificada de 9 niveles
+## 📊 Fuentes de Datos
 
-### Índices Regionales
-- **DST**: Disturbance Storm Time (WDC Kyoto)
-- **PIL**: Campo magnético en Pilar, Argentina (INTERMAGNET)
-
-## 🚁 Sistema de Recomendaciones para Drones
-
-El sistema evalúa múltiples factores de riesgo:
-
-- **GPS**: Precisión y disponibilidad de señal
-- **Brújula**: Interferencias magnéticas
-- **Comunicaciones**: Estabilidad de enlaces de radio
-- **SAMA**: Efecto amplificado en la región
-- **Validación**: Confiabilidad de los datos
-
-### Niveles de Operación
-
-1. **VUELO SEGURO** (Verde): Condiciones óptimas
-2. **PRECAUCIÓN** (Amarillo): Monitoreo constante recomendado
-3. **VUELO LIMITADO** (Naranja): Reducir distancia y altura
-4. **NO VOLAR** (Rojo): Prohibido operar
-
-## 🛠️ Instalación
-
-### Requisitos
-- Navegador web moderno (Chrome, Firefox, Safari, Edge)
-- Conexión a internet para datos en tiempo real
-- No requiere instalación de servidor
-
-### Uso Local
-
-1. Clona el repositorio:
-```bash
-git clone https://github.com/tuusuario/geomagnetic-monitor.git
-cd geomagnetic-monitor
-```
-
-2. Abre el archivo HTML en tu navegador:
-```bash
-# En Linux/Mac
-open kp-monitor-optimized.html
-
-# En Windows
-start kp-monitor-optimized.html
-```
-
-### Despliegue en Servidor Web
-
-1. Sube los archivos a tu servidor web:
-```bash
-scp kp-monitor-optimized.html geomagnetic-monitor.js usuario@servidor:/var/www/html/
-```
-
-2. Accede desde cualquier navegador:
-```
-https://tudominio.com/kp-monitor-optimized.html
-```
-
-## 📡 Fuentes de Datos
-
-- **GFZ Potsdam**: API oficial de índices geomagnéticos
-- **NOAA/SWPC**: Space Weather Prediction Center
-- **EMBRACE/INPE**: Programa brasileño de clima espacial
-- **WDC Kyoto**: World Data Center for Geomagnetism
-- **INTERMAGNET**: Red global de observatorios magnéticos
+El sistema integra datos de:
+- **GFZ Potsdam** (Alemania): Índices Kp, ap, Hp30, ap30
+- **NOAA/SWPC** (USA): Pronóstico Kp 3 días
+- **EMBRACE/INPE** (Brasil): Índice KSA regional
+- **WDC Kyoto** (Japón): Índice DST
+- **INTERMAGNET**: Datos magnéticos de Pilar (Argentina)
 
 ## 🔧 Configuración
 
-El sistema incluye configuración personalizable en `geomagnetic-monitor.js`:
+El sistema funciona sin configuración adicional. Para personalizar:
 
 ```javascript
+// En geomagnetic-monitor.js
 const CONFIG = {
+    // Ajustar timeouts según conexión
     SOURCE_TIMEOUTS: {
-        gfzApi: 20000,      // 20 segundos
-        kpNoaa: 30000,      // 30 segundos
-        // ... más timeouts
+        gfzApi: 30000,  // 30 segundos
+        kpNoaa: 40000,  // 40 segundos
+        // ...
     },
-    // ... más configuraciones
+    
+    // Modificar umbrales SAMA
+    SAMA_THRESHOLDS: {
+        SAFE: { KP: 3, AP: 18 },
+        CAUTION: { KP: 4, AP: 27 },
+        DANGER: { KP: 5, AP: 48 }
+    },
+    
+    // Configurar proxies CORS (agregar propios si es necesario)
+    CORS_PROXIES: [
+        {
+            name: 'Custom Proxy',
+            url: 'https://tu-proxy.com/cors?url=',
+            timeout: 8000,
+            priority: 0  // 0 = máxima prioridad
+        }
+    ]
 };
 ```
 
-## 📈 API y Métodos Públicos
+## 📱 Compatibilidad
 
-```javascript
-// Inicializar la aplicación
-geoMagApp.init();
+- Chrome/Edge 90+
+- Firefox 88+
+- Safari 14+
+- Navegadores móviles modernos
 
-// Actualizar datos manualmente
-geoMagApp.refreshData();
+## 🛡️ Interpretación de Índices
 
-// Activar/desactivar actualización automática
-geoMagApp.toggleAutoRefresh();
-
-// Cambiar fuente de datos
-geoMagApp.toggleDataSource();
-
-// Reintentar carga de fuente específica
-geoMagApp.retrySource('ksa');
-
-// Obtener estado actual
-const estado = geoMagApp.getState();
-
-// Obtener configuración
-const config = geoMagApp.getConfig();
-```
-
-## 🐛 Solución de Problemas
-
-### Error de CORS
-Algunas fuentes de datos pueden requerir un proxy CORS. El sistema incluye manejo automático con fallback a proxy.
-
-### Timeouts
-Si experimentas timeouts frecuentes, ajusta los valores en `CONFIG.SOURCE_TIMEOUTS`.
-
-### Datos faltantes
-El sistema maneja automáticamente las fuentes no disponibles y utiliza fuentes alternativas según la jerarquía de prioridades.
-
-## 📊 Interpretación de Datos
+### Índice Kp (0-9)
+- **0-2**: Condiciones tranquilas
+- **3-4**: Perturbación menor
+- **5-6**: Tormenta geomagnética
+- **7-9**: Tormenta severa
 
 ### Factor SAMA
-- **×1.0 - ×1.3**: Efecto mínimo a moderado
-- **×1.3 - ×1.5**: Efecto significativo
-- **×1.5 - ×2.0**: Efecto severo
+- **×1.0-1.2**: Amplificación baja
+- **×1.3-1.5**: Amplificación moderada  
+- **×1.6-2.0**: Amplificación alta
 
-### Índice Kp
-- **0-3**: Actividad baja (verde)
-- **4**: Actividad moderada (amarillo)
-- **5-6**: Tormenta menor (naranja)
-- **7-9**: Tormenta mayor (rojo)
+### Índices de Alta Resolución
+- **Hp30**: Kp calculado cada 30 minutos
+- **ap30**: Amplitud cada 30 minutos en nT
+- **ap**: Equivalente lineal de Kp en nanoteslas
+
+## 🚁 Recomendaciones para Drones
+
+### Vuelo Seguro (Verde)
+- Kp efectivo < 3
+- Operaciones normales
+- Precisión GPS ±1m
+
+### Precaución (Amarillo)
+- Kp efectivo 3-4
+- Monitorear constantemente
+- Reducir distancia de operación
+
+### No Volar (Rojo)
+- Kp efectivo ≥ 5
+- Riesgo crítico
+- Posponer operaciones
+
+## 🆕 Novedades v3.0
+
+### Mejoras Técnicas
+1. **Parsers Robustos**: Uso de expresiones regulares para mayor flexibilidad
+2. **Gestión de Estado**: StateManager centralizado previene condiciones de carrera
+3. **Múltiples Proxies CORS**: Sistema de fallback con prioridades configurables
+4. **Optimización de Rendimiento**: 
+   - ChartManager con detección de cambios
+   - DOMUpdater con actualizaciones batch
+   - ValidationPanelUpdater granular
+
+### Mejoras de Arquitectura
+- Configuración completamente centralizada
+- Documentación inline detallada
+- Manejo de errores mejorado
+- Sistema de suscripciones a cambios de estado
+
+## 🔍 Solución de Problemas
+
+### "Error de conexión"
+- Verificar conexión a internet
+- Algunas fuentes pueden estar temporalmente inactivas
+- El sistema usa fuentes alternativas automáticamente
+- Revisar el panel de validación para detalles por fuente
+
+### Datos no actualizados
+- Hacer clic en "🔄 Actualizar"
+- Verificar el panel de validación
+- Activar actualización automática
+- Usar botón "Reintentar" en fuentes con error
+
+### Timeout en fuentes
+- Normal en conexiones lentas
+- El sistema intentará con proxies alternativos
+- Considerar aumentar timeouts en CONFIG
 
 ## 🤝 Contribuciones
 
-Las contribuciones son bienvenidas. Por favor:
+Las contribuciones son bienvenidas:
 
-1. Fork el proyecto
-2. Crea una rama para tu feature (`git checkout -b feature/AmazingFeature`)
-3. Commit tus cambios (`git commit -m 'Add some AmazingFeature'`)
-4. Push a la rama (`git push origin feature/AmazingFeature`)
-5. Abre un Pull Request
+1. Fork del repositorio
+2. Crear rama de feature (`git checkout -b feature/NuevaCaracteristica`)
+3. Commit cambios (`git commit -m 'Agregar nueva característica'`)
+4. Push a la rama (`git push origin feature/NuevaCaracteristica`)
+5. Abrir Pull Request
+
+### Guías de Contribución
+- Mantener la estructura modular del código
+- Documentar nuevas funciones y clases
+- Agregar constantes a CONFIG en lugar de hardcodear
+- Probar en múltiples navegadores
 
 ## 📄 Licencia
 
-Este proyecto está licenciado bajo la Licencia MIT - ver el archivo [LICENSE](LICENSE) para más detalles.
-
-## 👥 Autores
-
-- Sistema original desarrollado para monitoreo de drones en agricultura de precisión
-- Optimizado para la región SAMA (Sudamérica)
+Este proyecto está bajo licencia MIT. Ver archivo `LICENSE.txt` para detalles.
 
 ## 🙏 Agradecimientos
 
-- GFZ German Research Centre for Geosciences
-- NOAA Space Weather Prediction Center
-- EMBRACE/INPE Brasil
-- World Data Center for Geomagnetism, Kyoto
-- INTERMAGNET
+- GFZ Potsdam por la API de índices geomagnéticos
+- NOAA/SWPC por datos de pronóstico
+- EMBRACE/INPE por índice KSA regional
+- WDC Kyoto por datos DST
+- INTERMAGNET por datos magnéticos
 
 ## 📞 Contacto
 
-Para preguntas o soporte, por favor abre un issue en GitHub.
+Para consultas o sugerencias:
+- Abrir un issue en GitHub
+- Contribuir con mejoras mediante PR
 
 ---
 
-**Nota**: Este sistema está diseñado como herramienta de apoyo. Siempre siga las regulaciones locales y las mejores prácticas de seguridad para operaciones con drones.
+**Nota**: Este sistema es una herramienta de referencia. Siempre consultar múltiples fuentes y usar criterio profesional para decisiones operacionales críticas.
