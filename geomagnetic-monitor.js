@@ -4,20 +4,30 @@
 
 'use strict';
 
+// Detectar entorno de ejecución
+const IS_PRODUCTION = window.location.hostname !== 'localhost' && 
+                     window.location.hostname !== '127.0.0.1';
+
+// Usar fecha real del sistema
+const SYSTEM_DATE = new Date();
+console.log('Monitor Geomagnético v2.0.1');
+console.log('Fecha del sistema:', SYSTEM_DATE.toISOString());
+console.log('Entorno:', IS_PRODUCTION ? 'Producción' : 'Desarrollo');
+
 // Namespace principal de la aplicación
 const geoMagApp = (function() {
     
     // ================== CONFIGURACIÓN ==================
     const CONFIG = {
-        // Timeouts por fuente en milisegundos
+        // Timeouts por fuente en milisegundos (ajustados para producción)
         SOURCE_TIMEOUTS: {
-            gfzApi: 20000,
-            kpPager: 10000,
-            kpNoaa: 30000,
-            dst: 40000,
-            ksa: 20000,
-            intermagnetPIL: 10000,
-            intermagnetVSS: 10000
+            gfzApi: IS_PRODUCTION ? 30000 : 20000,
+            kpPager: IS_PRODUCTION ? 15000 : 10000,
+            kpNoaa: IS_PRODUCTION ? 40000 : 30000,
+            dst: IS_PRODUCTION ? 60000 : 40000,
+            ksa: IS_PRODUCTION ? 30000 : 20000,
+            intermagnetPIL: IS_PRODUCTION ? 15000 : 10000,
+            intermagnetVSS: IS_PRODUCTION ? 15000 : 10000
         },
         
         // URLs de fuentes de datos
@@ -762,22 +772,29 @@ const geoMagApp = (function() {
             let latestDst = null;
             
             for (const line of lines) {
-                if (line.startsWith('DST')) {
-                    const nums = line.match(/[+-]?\d+/g);
-                    if (!nums || nums.length < 4) continue;
-                    const day = parseInt(nums[1]);
-                    if (day === now.getUTCDate()) {
-                        const values = nums.slice(3, 27).map(v => {
-                            if (v.length > 4) return NaN;
-                            const n = parseInt(v, 10);
-                            return Math.abs(n) <= 1000 ? n : NaN;
-                        });
-                        const hour = now.getUTCHours();
-                        if (hour < values.length) {
-                            const val = values[hour];
-                            if (!isNaN(val) && val !== 9999 && Math.abs(val) <= 1000) {
-                                latestDst = val;
-                            }
+                if (line.startsWith('DST') && line.length > 30) {
+                    // Parseo mejorado para evitar valores extraños
+                    const parts = line.split(/\s+/);
+                    if (parts.length < 27) continue;
+                    
+                    // El formato es: DST yymm dd valores_horarios...
+                    const dayStr = parts[2];
+                    const day = parseInt(dayStr);
+                    
+                    if (isNaN(day) || day !== now.getUTCDate()) continue;
+                    
+                    const hour = now.getUTCHours();
+                    const hourIndex = 3 + hour; // Los valores DST empiezan en el índice 3
+                    
+                    if (hourIndex < parts.length) {
+                        const valStr = parts[hourIndex];
+                        const val = parseInt(valStr);
+                        
+                        // Validar que el valor esté en un rango razonable para DST (-500 a 200 nT)
+                        if (!isNaN(val) && val !== 9999 && val >= -500 && val <= 200) {
+                            latestDst = val;
+                            console.log(`DST encontrado: ${val} nT para el día ${day} hora ${hour}`);
+                            break;
                         }
                     }
                 }
@@ -814,53 +831,69 @@ const geoMagApp = (function() {
         updateSourceStatus(source, 'loading');
         
         try {
-            const today = new Date();
-            const year = today.getFullYear();
-            const dateString = today.toISOString().split('T')[0];
-            let url = `${CONFIG.DATA_SOURCES.ksaEmbraceBase}${year}/${dateString}.txt`;
+            // Intentar varios días hacia atrás si no hay datos actuales
+            let targetDate = new Date();
+            let attempts = 0;
+            const maxAttempts = 3;
             
-            const response = await fetchWithCORS(url, {
-                source: source,
-                timeout: CONFIG.SOURCE_TIMEOUTS.ksa
-            });
-            
-            const text = await response.text();
-            const lines = text.trim().split('\n').filter(line => line.trim());
-            const timestamps = [];
-            const values = [];
-            
-            for (const line of lines) {
-                const parts = line.trim().split(/\s+/);
-                if (parts.length >= 2 && parts[0].match(/^\d{4}-\d{2}-\d{2}/)) {
-                    try {
-                        const time = new Date(parts[0]);
-                        const hour = time.getUTCHours();
-                        timestamps.push(`${hour}h`);
-                        const val = parseFloat(parts[1].replace(/[+-]/g, ''));
-                        if (!isNaN(val)) {
-                            values.push(val);
+            while (attempts < maxAttempts) {
+                const year = targetDate.getFullYear();
+                const dateString = targetDate.toISOString().split('T')[0];
+                const url = `${CONFIG.DATA_SOURCES.ksaEmbraceBase}${year}/${dateString}.txt`;
+                
+                try {
+                    console.log(`Intentando KSA para ${dateString}`);
+                    const response = await fetchWithCORS(url, {
+                        source: source,
+                        timeout: CONFIG.SOURCE_TIMEOUTS.ksa
+                    });
+                    
+                    const text = await response.text();
+                    const lines = text.trim().split('\n').filter(line => line.trim());
+                    const timestamps = [];
+                    const values = [];
+                    
+                    for (const line of lines) {
+                        const parts = line.trim().split(/\s+/);
+                        if (parts.length >= 2 && parts[0].match(/^\d{4}-\d{2}-\d{2}/)) {
+                            try {
+                                const time = new Date(parts[0]);
+                                const hour = time.getUTCHours();
+                                timestamps.push(`${hour}h`);
+                                const val = parseFloat(parts[1].replace(/[+-]/g, ''));
+                                if (!isNaN(val) && val >= 0 && val <= 9) {
+                                    values.push(val);
+                                }
+                            } catch (e) {
+                                console.warn('KSA: Línea con formato inválido:', line);
+                            }
                         }
-                    } catch (e) {
-                        console.warn('KSA: Línea con formato inválido:', line);
                     }
+                    
+                    if (values.length > 0) {
+                        const latency = Date.now() - startTime;
+                        console.log(`KSA cargado exitosamente: ${values.length} valores de ${dateString} en ${latency}ms`);
+                        state.validationResults[source] = {
+                            status: 'valid',
+                            confidence: 95,
+                            latency: latency,
+                            lastUpdate: new Date(),
+                            dataPoints: values.length,
+                            dataDate: dateString
+                        };
+                        updateSourceStatus(source, 'valid');
+                        return { timestamps, values };
+                    }
+                } catch (attemptError) {
+                    console.log(`KSA: No hay datos para ${dateString}`);
                 }
+                
+                // Retroceder un día
+                targetDate.setDate(targetDate.getDate() - 1);
+                attempts++;
             }
             
-            const latency = Date.now() - startTime;
-            if (values.length > 0) {
-                console.log(`KSA cargado exitosamente: ${values.length} valores en ${latency}ms`);
-                state.validationResults[source] = {
-                    status: 'valid',
-                    confidence: 95,
-                    latency: latency,
-                    lastUpdate: new Date(),
-                    dataPoints: values.length
-                };
-                updateSourceStatus(source, 'valid');
-                return { timestamps, values };
-            }
-            
-            throw new Error('No hay datos disponibles');
+            throw new Error(`No hay datos KSA disponibles en los últimos ${maxAttempts} días`);
             
         } catch (error) {
             console.error('Error loading KSA:', error);
@@ -882,40 +915,58 @@ const geoMagApp = (function() {
         updateSourceStatus(source, 'loading');
         
         try {
-            const today = new Date().toISOString().split('T')[0];
-            const baseUrl = observatory === 'PIL' ? CONFIG.DATA_SOURCES.intermagnetPIL : CONFIG.DATA_SOURCES.intermagnetVSS;
-            const url = `${baseUrl}${today}&dataDuration=1&publicationState=best-avail&format=json`;
+            // Intentar varios días hacia atrás si no hay datos actuales
+            let targetDate = new Date();
+            let attempts = 0;
+            const maxAttempts = 3;
             
-            const response = await fetchWithCORS(url, {
-                source: source,
-                timeout: CONFIG.SOURCE_TIMEOUTS[source] || 5000
-            });
-            
-            const data = await response.json();
-            
-            if (data && data.data && data.data.length > 0) {
-                const latest = data.data[data.data.length - 1];
-                const result = {
-                    timestamp: latest.timestamp,
-                    x: latest.x,
-                    y: latest.y,
-                    z: latest.z,
-                    f: Math.sqrt(latest.x * latest.x + latest.y * latest.y + latest.z * latest.z),
-                    observatory: observatory
-                };
+            while (attempts < maxAttempts) {
+                const dateStr = targetDate.toISOString().split('T')[0];
+                const baseUrl = observatory === 'PIL' ? CONFIG.DATA_SOURCES.intermagnetPIL : CONFIG.DATA_SOURCES.intermagnetVSS;
+                const url = `${baseUrl}${dateStr}&dataDuration=1&publicationState=best-avail&format=json`;
                 
-                state.validationResults[source] = {
-                    status: 'valid',
-                    confidence: 92,
-                    latency: Date.now() - startTime,
-                    lastUpdate: new Date()
-                };
+                try {
+                    console.log(`Intentando INTERMAGNET ${observatory} para ${dateStr}`);
+                    const response = await fetchWithCORS(url, {
+                        source: source,
+                        timeout: CONFIG.SOURCE_TIMEOUTS[source] || 5000
+                    });
+                    
+                    const data = await response.json();
+                    
+                    if (data && data.data && data.data.length > 0) {
+                        const latest = data.data[data.data.length - 1];
+                        const result = {
+                            timestamp: latest.timestamp,
+                            x: latest.x || 0,
+                            y: latest.y || 0,
+                            z: latest.z || 0,
+                            f: Math.sqrt((latest.x || 0) ** 2 + (latest.y || 0) ** 2 + (latest.z || 0) ** 2),
+                            observatory: observatory,
+                            dataDate: dateStr
+                        };
+                        
+                        state.validationResults[source] = {
+                            status: 'valid',
+                            confidence: 92,
+                            latency: Date.now() - startTime,
+                            lastUpdate: new Date(),
+                            note: attempts > 0 ? `Datos de ${dateStr}` : undefined
+                        };
+                        
+                        updateSourceStatus(source, 'valid');
+                        return result;
+                    }
+                } catch (attemptError) {
+                    console.log(`INTERMAGNET ${observatory}: No hay datos para ${dateStr}`);
+                }
                 
-                updateSourceStatus(source, 'valid');
-                return result;
+                // Retroceder un día
+                targetDate.setDate(targetDate.getDate() - 1);
+                attempts++;
             }
             
-            throw new Error('No hay datos disponibles');
+            throw new Error(`No hay datos disponibles en los últimos ${maxAttempts} días`);
             
         } catch (error) {
             console.error(`Error loading ${observatory} data:`, error);
@@ -1744,9 +1795,17 @@ const geoMagApp = (function() {
     
     async function refreshData() {
         document.getElementById('chartLoading').style.display = 'flex';
-        document.getElementById('systemStatus').textContent = 'Actualizando...';
+        document.getElementById('systemStatus').textContent = 'Conectando con fuentes...';
         
         try {
+            // Actualizar estado mientras carga
+            setTimeout(() => {
+                const status = document.getElementById('systemStatus');
+                if (status.textContent === 'Conectando con fuentes...') {
+                    status.textContent = 'Cargando datos...';
+                }
+            }, 2000);
+            
             const success = await loadDataHybrid();
             
             if (!success) {
@@ -1884,6 +1943,12 @@ const geoMagApp = (function() {
     function init() {
         console.log('Monitor Geomagnético iniciando...');
         console.log('Configuración: Multi-índices GFZ con análisis SAMA mejorado');
+        
+        // Mostrar fecha del sistema
+        const systemDateElement = document.getElementById('systemDate');
+        if (systemDateElement) {
+            systemDateElement.textContent = SYSTEM_DATE.toLocaleString('es-AR');
+        }
         
         // Inicializar panel de validación
         updateValidationPanel();
