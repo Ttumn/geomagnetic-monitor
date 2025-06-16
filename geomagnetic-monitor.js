@@ -304,7 +304,7 @@ const geoMagApp = (function() {
     // ================== CLASE GFZ DATA LOADER ==================
     class GFZDataLoader {
         constructor() {
-            this.baseUrl = 'https://kp.gfz-potsdam.de/app/json/';
+            this.baseUrl = 'https://kp.gfz.de/app/json/';
             
             this.availableIndices = {
                 withStatus: ['Kp', 'ap', 'Ap', 'Cp', 'C9', 'SN'],
@@ -2354,7 +2354,7 @@ const geoMagApp = (function() {
             }
             
             domUpdater.update('dstValue', `${dstValue} nT`);
-            domUpdater.update('dstValue', `${dstValue} nT`, 'style', { color: dstColor });
+            domUpdater.update('dstValue', { color: dstColor }, 'style');
             domUpdater.update('dstStatus', dstStatus);
         }
         
@@ -2367,7 +2367,7 @@ const geoMagApp = (function() {
             else if (latestKsa >= 5) ksaColor = '#f59e0b';
             else if (latestKsa >= 4) ksaColor = '#fbbf24';
             
-            domUpdater.update('ksaValue', latestKsa.toFixed(2), 'style', { color: ksaColor });
+            domUpdater.update('ksaValue', { color: ksaColor }, 'style');
         }
         
         if (state.forecastData.pilData && state.forecastData.pilData.f) {
@@ -2379,7 +2379,7 @@ const geoMagApp = (function() {
     // ================== FUNCIONES PÚBLICAS ==================
     
     async function refreshData() {
-        domUpdater.update('chartLoading', 'flex', 'style', { display: 'flex' });
+        domUpdater.update('chartLoading', { display: 'flex' }, 'style');
         domUpdater.update('systemStatus', 'Conectando con fuentes...');
         
         try {
@@ -2421,7 +2421,7 @@ const geoMagApp = (function() {
             console.error('Error actualizando datos:', error);
             domUpdater.update('systemStatus', 'Error de conexión');
         } finally {
-            domUpdater.update('chartLoading', 'none', 'style', { display: 'none' });
+            domUpdater.update('chartLoading', { display: 'none' }, 'style');
         }
     }
     
