@@ -67,21 +67,24 @@ cd geomagnetic-monitor
 ```bash
 # En Linux/Mac
 open index.html
+open mobile.html
 
 # En Windows
 start index.html
+start mobile.html
 ```
 
 ### Despliegue en Servidor Web
 
 1. Sube los archivos a tu servidor web:
 ```bash
-scp index.html geomagnetic-monitor.js usuario@servidor:/var/www/html/
+scp index.html geomagnetic-monitor.js mobile.html mobile.js usuario@servidor:/var/www/html/
 ```
 
 2. Accede desde cualquier navegador:
 ```
 https://tudominio.com/index.html
+https://tudominio.com/mobile.html
 ```
 
 ## 📡 Fuentes de Datos
