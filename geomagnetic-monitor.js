@@ -105,7 +105,6 @@ const geoMagApp = (function() {
             kpNoaa: IS_PRODUCTION ? 40000 : 30000,
             dst: IS_PRODUCTION ? 60000 : 40000,
             ksa: IS_PRODUCTION ? 30000 : 20000,
-            intermagnetPIL: IS_PRODUCTION ? 15000 : 10000,
             intermagnetVSS: IS_PRODUCTION ? 15000 : 10000
         },
         
@@ -113,7 +112,6 @@ const geoMagApp = (function() {
         DATA_SOURCES: {
             kpPager: "https://www.spacepager.eu/fileadmin/Products/WP3/kp_product_file_FORECAST_PAGER_SWIFT_LAST.json",
             kpNoaa: "https://services.swpc.noaa.gov/text/3-day-geomag-forecast.txt",
-            intermagnetPIL: "https://imag-data.bgs.ac.uk/GIN_V1/GINServices?Request=GetData&ObservatoryIagaCode=PIL&samplesPerDay=Minute&dataStartDate=",
             intermagnetVSS: "https://imag-data.bgs.ac.uk/GIN_V1/GINServices?Request=GetData&ObservatoryIagaCode=VSS&samplesPerDay=Minute&dataStartDate=",
             dstKyoto: "https://wdc.kugi.kyoto-u.ac.jp/dst_realtime/presentmonth/",
             ksaEmbraceBase: "https://embracedata.inpe.br/ksa/"
@@ -127,8 +125,7 @@ const geoMagApp = (function() {
             { id: 'kpGFZ', name: 'Kp GFZ', icon: '🌍', priority: 4, index: 'Kp' },
             { id: 'apGFZ', name: 'ap GFZ', icon: '📊', priority: 5, index: 'ap' },
             { id: 'ap30', name: 'ap30 GFZ', icon: '⏱️', priority: 6, index: 'ap30' },
-            { id: 'dst', name: 'DST Kyoto', icon: '🇯🇵', priority: 7 },
-            { id: 'intermagnetPIL', name: 'INTERMAGNET PIL', icon: '🇦🇷', priority: 8 }
+            { id: 'dst', name: 'DST Kyoto', icon: '🇯🇵', priority: 7 }
         ]
     };
 
@@ -163,7 +160,6 @@ const geoMagApp = (function() {
                     C9: [],
                     SN: [],
                     dstCurrent: null,
-                    pilData: null,
                     vssData: null,
                     ksaIndex: null,
                     ksaData: null,
@@ -1720,7 +1716,7 @@ const geoMagApp = (function() {
         }
     }
 
-    async function loadIntermagnetData(observatory = 'PIL') {
+    async function loadIntermagnetData(observatory = 'VSS') {
         const source = `intermagnet${observatory}`;
         const startTime = Date.now();
         
@@ -1736,7 +1732,7 @@ const geoMagApp = (function() {
             
             while (attempts < maxAttempts) {
                 const dateStr = targetDate.toISOString().split('T')[0];
-                const baseUrl = observatory === 'PIL' ? CONFIG.DATA_SOURCES.intermagnetPIL : CONFIG.DATA_SOURCES.intermagnetVSS;
+                const baseUrl = CONFIG.DATA_SOURCES.intermagnetVSS;
                 const url = `${baseUrl}${dateStr}&dataDuration=1&publicationState=best-avail&format=json`;
                 
                 try {
@@ -1802,8 +1798,7 @@ const geoMagApp = (function() {
             const promises = [
                 loadKsaIndex(),
                 loadNoaaKp(),
-                loadCurrentDst(),
-                loadIntermagnetData('PIL')
+                loadCurrentDst()
             ];
             
             const results = await Promise.allSettled(promises);
@@ -1837,13 +1832,7 @@ const geoMagApp = (function() {
                 console.error('Error cargando DST:', results[2].reason);
             }
             
-            if (results[3].status === 'fulfilled' && results[3].value) {
-                updates['forecastData.pilData'] = results[3].value;
-                console.log('PIL cargado:', results[3].value.f, 'nT');
-                successCount++;
-            } else {
-                console.error('Error cargando PIL:', results[3].reason);
-            }
+
             
             // Aplicar actualizaciones
             await stateManager.updateState(updates);
@@ -1875,7 +1864,7 @@ const geoMagApp = (function() {
                 }
             }
             
-            console.log('Carga legacy completada:', successCount, 'de 4 fuentes exitosas');
+            console.log('Carga legacy completada:', successCount, 'de 3 fuentes exitosas');
             return successCount > 0;
             
         } catch (error) {
@@ -2093,29 +2082,34 @@ const geoMagApp = (function() {
             });
         }
         
-        // ap30 (si hay valores significativos)
-        if (state.forecastData.ap30.length > 0 && state.currentDataSource !== 'legacy') {
-            const maxAp30 = Math.max(...state.forecastData.ap30);
-            if (maxAp30 > 10) {
-                datasets.push({
-                    label: 'ap30 (nT)',
-                    data: state.forecastData.ap30,
-                    borderColor: '#64748b',
-                    borderWidth: 2,
-                    borderDash: [4, 2],
-                    tension: 0.4,
-                    pointRadius: 2,
-                    yAxisID: 'y-ap',
-                    hidden: true
-                });
-            }
-        }
         
         // Kp Efectivo SAMA
         const kpBase = state.forecastData.ksaData?.values || state.forecastData.kpNoaa || 
                       state.forecastData.hp30 || state.forecastData.kpGFZ;
         if (kpBase && kpBase.length > 0) {
             const kpSAMA = kpBase.map(kp => kp ? kp * state.forecastData.samaFactor : null);
+            const kpLower = kpSAMA.map(v => v !== null ? v - 0.5 : null);
+            const kpUpper = kpSAMA.map(v => v !== null ? v + 0.5 : null);
+            datasets.push({
+                label: 'Incertidumbre SAMA',
+                data: kpLower,
+                borderColor: 'rgba(239,68,68,0)',
+                backgroundColor: 'rgba(239,68,68,0.1)',
+                fill: false,
+                pointRadius: 0,
+                yAxisID: 'y-kp',
+                order: 0
+            });
+            datasets.push({
+                label: 'Incertidumbre SAMA Superior',
+                data: kpUpper,
+                borderColor: 'rgba(239,68,68,0)',
+                backgroundColor: 'rgba(239,68,68,0.1)',
+                fill: '-1',
+                pointRadius: 0,
+                yAxisID: 'y-kp',
+                order: 0
+            });
             datasets.push({
                 label: 'Kp Efectivo SAMA',
                 data: kpSAMA,
@@ -2125,7 +2119,7 @@ const geoMagApp = (function() {
                 tension: 0.4,
                 pointRadius: 3,
                 yAxisID: 'y-kp',
-                order: 0
+                order: 1
             });
         }
         
@@ -2370,10 +2364,6 @@ const geoMagApp = (function() {
             domUpdater.update('ksaValue', { color: ksaColor }, 'style');
         }
         
-        if (state.forecastData.pilData && state.forecastData.pilData.f) {
-            domUpdater.update('pilField', `${state.forecastData.pilData.f.toFixed(0)} nT`);
-            domUpdater.update('pilStatus', 'INTERMAGNET PIL');
-        }
     }
 
     // ================== FUNCIONES PÚBLICAS ==================
@@ -2496,9 +2486,6 @@ const geoMagApp = (function() {
                     break;
                 case 'dst':
                     await loadCurrentDst();
-                    break;
-                case 'intermagnetPIL':
-                    await loadIntermagnetData('PIL');
                     break;
             }
             

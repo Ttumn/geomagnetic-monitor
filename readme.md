@@ -30,7 +30,6 @@ Sistema de monitoreo y predicción de actividad geomagnética optimizado para op
 
 ### Índices Regionales
 - **DST**: Disturbance Storm Time (WDC Kyoto)
-- **PIL**: Campo magnético en Pilar, Argentina (INTERMAGNET)
 
 ## 🚁 Sistema de Recomendaciones para Drones
 
