@@ -67,22 +67,22 @@ cd geomagnetic-monitor
 2. Abre el archivo HTML en tu navegador:
 ```bash
 # En Linux/Mac
-open kp-monitor-optimized.html
+open index.html
 
 # En Windows
-start kp-monitor-optimized.html
+start index.html
 ```
 
 ### Despliegue en Servidor Web
 
 1. Sube los archivos a tu servidor web:
 ```bash
-scp kp-monitor-optimized.html geomagnetic-monitor.js usuario@servidor:/var/www/html/
+scp index.html geomagnetic-monitor.js usuario@servidor:/var/www/html/
 ```
 
 2. Accede desde cualquier navegador:
 ```
-https://tudominio.com/kp-monitor-optimized.html
+https://tudominio.com/index.html
 ```
 
 ## 📡 Fuentes de Datos
