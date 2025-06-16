@@ -4,20 +4,30 @@
 
 'use strict';
 
+// Detectar entorno de ejecución
+const IS_PRODUCTION = window.location.hostname !== 'localhost' && 
+                     window.location.hostname !== '127.0.0.1';
+
+// Usar fecha real del sistema
+const SYSTEM_DATE = new Date();
+console.log('Monitor Geomagnético v2.0.1');
+console.log('Fecha del sistema:', SYSTEM_DATE.toISOString());
+console.log('Entorno:', IS_PRODUCTION ? 'Producción' : 'Desarrollo');
+
 // Namespace principal de la aplicación
 const geoMagApp = (function() {
     
     // ================== CONFIGURACIÓN ==================
     const CONFIG = {
-        // Timeouts por fuente en milisegundos
+        // Timeouts por fuente en milisegundos (ajustados para producción)
         SOURCE_TIMEOUTS: {
-            gfzApi: 20000,
-            kpPager: 10000,
-            kpNoaa: 30000,
-            dst: 40000,
-            ksa: 20000,
-            intermagnetPIL: 10000,
-            intermagnetVSS: 10000
+            gfzApi: IS_PRODUCTION ? 30000 : 20000,
+            kpPager: IS_PRODUCTION ? 15000 : 10000,
+            kpNoaa: IS_PRODUCTION ? 40000 : 30000,
+            dst: IS_PRODUCTION ? 60000 : 40000,
+            ksa: IS_PRODUCTION ? 30000 : 20000,
+            intermagnetPIL: IS_PRODUCTION ? 15000 : 10000,
+            intermagnetVSS: IS_PRODUCTION ? 15000 : 10000
         },
         
         // URLs de fuentes de datos
@@ -43,18 +53,6 @@ const geoMagApp = (function() {
             { id: 'intermagnetPIL', name: 'INTERMAGNET PIL', icon: '🇦🇷', priority: 8 }
         ]
     };
-
-    // Configuración específica para GitHub Pages
-    const IS_PRODUCTION = window.location.hostname === 'ttumn.github.io';
-    if (IS_PRODUCTION) {
-        CONFIG.SOURCE_TIMEOUTS = {
-            ...CONFIG.SOURCE_TIMEOUTS,
-            gfzApi: 30000,
-            kpNoaa: 40000,
-            dst: 60000,
-            ksa: 30000,
-        };
-    }
 
     // ================== ESTADO GLOBAL ==================
     const state = {
@@ -755,47 +753,53 @@ const geoMagApp = (function() {
     async function loadCurrentDst() {
         const source = 'dst';
         const startTime = Date.now();
-
+        
         updateSourceStatus(source, 'loading');
-
+        
         try {
             const now = new Date();
             const yearShort = now.getFullYear().toString().slice(-2);
             const month = String(now.getMonth() + 1).padStart(2, '0');
             const url = `${CONFIG.DATA_SOURCES.dstKyoto}dst${yearShort}${month}.for.request`;
-
+            
             const response = await fetchWithCORS(url, {
                 source: source,
                 timeout: CONFIG.SOURCE_TIMEOUTS.dst
             });
-
+            
             const text = await response.text();
             const lines = text.split('\n');
             let latestDst = null;
-
+            
             for (const line of lines) {
-                if (line.startsWith('DST')) {
-                    // Mejorar el parseo para evitar valores extraños
+                if (line.startsWith('DST') && line.length > 30) {
+                    // Parseo mejorado para evitar valores extraños
                     const parts = line.split(/\s+/);
                     if (parts.length < 27) continue;
-
-                    const day = parseInt(parts[2]);
+                    
+                    // El formato es: DST yymm dd valores_horarios...
+                    const dayStr = parts[2];
+                    const day = parseInt(dayStr);
+                    
                     if (isNaN(day) || day !== now.getUTCDate()) continue;
-
+                    
                     const hour = now.getUTCHours();
-                    const hourIndex = 3 + hour; // DST values start at index 3
-
+                    const hourIndex = 3 + hour; // Los valores DST empiezan en el índice 3
+                    
                     if (hourIndex < parts.length) {
-                        const val = parseInt(parts[hourIndex]);
-                        // Validar que el valor esté en un rango razonable (-500 a 200 nT)
+                        const valStr = parts[hourIndex];
+                        const val = parseInt(valStr);
+                        
+                        // Validar que el valor esté en un rango razonable para DST (-500 a 200 nT)
                         if (!isNaN(val) && val !== 9999 && val >= -500 && val <= 200) {
                             latestDst = val;
+                            console.log(`DST encontrado: ${val} nT para el día ${day} hora ${hour}`);
                             break;
                         }
                     }
                 }
             }
-
+            
             const latency = Date.now() - startTime;
             state.validationResults[source] = {
                 status: latestDst !== null ? 'valid' : 'no-data',
@@ -803,10 +807,10 @@ const geoMagApp = (function() {
                 latency: latency,
                 lastUpdate: new Date()
             };
-
+            
             updateSourceStatus(source, latestDst !== null ? 'valid' : 'error');
             return latestDst;
-
+            
         } catch (error) {
             console.error('Error loading DST:', error);
             state.validationResults[source] = {
@@ -823,36 +827,32 @@ const geoMagApp = (function() {
     async function loadKsaIndex() {
         const source = 'ksa';
         const startTime = Date.now();
-
+        
         updateSourceStatus(source, 'loading');
-
+        
         try {
-            // Usar la fecha actual real, no la simulada
-            const today = new Date();
-            const year = today.getFullYear();
-            const dateString = today.toISOString().split('T')[0];
-
-            // Si no hay datos para hoy, intentar días anteriores
+            // Intentar varios días hacia atrás si no hay datos actuales
+            let targetDate = new Date();
             let attempts = 0;
             const maxAttempts = 3;
-            let targetDate = new Date(today);
-
+            
             while (attempts < maxAttempts) {
-                const tryYear = targetDate.getFullYear();
-                const tryDateString = targetDate.toISOString().split('T')[0];
-                const url = `${CONFIG.DATA_SOURCES.ksaEmbraceBase}${tryYear}/${tryDateString}.txt`;
-
+                const year = targetDate.getFullYear();
+                const dateString = targetDate.toISOString().split('T')[0];
+                const url = `${CONFIG.DATA_SOURCES.ksaEmbraceBase}${year}/${dateString}.txt`;
+                
                 try {
+                    console.log(`Intentando KSA para ${dateString}`);
                     const response = await fetchWithCORS(url, {
                         source: source,
                         timeout: CONFIG.SOURCE_TIMEOUTS.ksa
                     });
-
+                    
                     const text = await response.text();
                     const lines = text.trim().split('\n').filter(line => line.trim());
                     const timestamps = [];
                     const values = [];
-
+                    
                     for (const line of lines) {
                         const parts = line.trim().split(/\s+/);
                         if (parts.length >= 2 && parts[0].match(/^\d{4}-\d{2}-\d{2}/)) {
@@ -869,31 +869,31 @@ const geoMagApp = (function() {
                             }
                         }
                     }
-
+                    
                     if (values.length > 0) {
                         const latency = Date.now() - startTime;
-                        console.log(`KSA cargado exitosamente: ${values.length} valores de ${tryDateString} en ${latency}ms`);
+                        console.log(`KSA cargado exitosamente: ${values.length} valores de ${dateString} en ${latency}ms`);
                         state.validationResults[source] = {
                             status: 'valid',
                             confidence: 95,
                             latency: latency,
                             lastUpdate: new Date(),
                             dataPoints: values.length,
-                            dataDate: tryDateString
+                            dataDate: dateString
                         };
                         updateSourceStatus(source, 'valid');
                         return { timestamps, values };
                     }
                 } catch (attemptError) {
-                    console.log(`KSA: No hay datos para ${tryDateString}`);
+                    console.log(`KSA: No hay datos para ${dateString}`);
                 }
-
+                
                 // Retroceder un día
                 targetDate.setDate(targetDate.getDate() - 1);
                 attempts++;
             }
-
-            throw new Error('No hay datos KSA disponibles en los últimos 3 días');
+            
+            throw new Error(`No hay datos KSA disponibles en los últimos ${maxAttempts} días`);
             
         } catch (error) {
             console.error('Error loading KSA:', error);
@@ -911,28 +911,29 @@ const geoMagApp = (function() {
     async function loadIntermagnetData(observatory = 'PIL') {
         const source = `intermagnet${observatory}`;
         const startTime = Date.now();
-
+        
         updateSourceStatus(source, 'loading');
-
+        
         try {
-            // Usar la fecha de ayer si hoy no tiene datos
+            // Intentar varios días hacia atrás si no hay datos actuales
             let targetDate = new Date();
             let attempts = 0;
-            const maxAttempts = 3; // Intentar hasta 3 días atrás
-
+            const maxAttempts = 3;
+            
             while (attempts < maxAttempts) {
                 const dateStr = targetDate.toISOString().split('T')[0];
                 const baseUrl = observatory === 'PIL' ? CONFIG.DATA_SOURCES.intermagnetPIL : CONFIG.DATA_SOURCES.intermagnetVSS;
                 const url = `${baseUrl}${dateStr}&dataDuration=1&publicationState=best-avail&format=json`;
-
+                
                 try {
+                    console.log(`Intentando INTERMAGNET ${observatory} para ${dateStr}`);
                     const response = await fetchWithCORS(url, {
                         source: source,
                         timeout: CONFIG.SOURCE_TIMEOUTS[source] || 5000
                     });
-
+                    
                     const data = await response.json();
-
+                    
                     if (data && data.data && data.data.length > 0) {
                         const latest = data.data[data.data.length - 1];
                         const result = {
@@ -944,7 +945,7 @@ const geoMagApp = (function() {
                             observatory: observatory,
                             dataDate: dateStr
                         };
-
+                        
                         state.validationResults[source] = {
                             status: 'valid',
                             confidence: 92,
@@ -952,20 +953,20 @@ const geoMagApp = (function() {
                             lastUpdate: new Date(),
                             note: attempts > 0 ? `Datos de ${dateStr}` : undefined
                         };
-
+                        
                         updateSourceStatus(source, 'valid');
                         return result;
                     }
                 } catch (attemptError) {
-                    console.log(`Intento ${attempts + 1} falló para ${dateStr}`);
+                    console.log(`INTERMAGNET ${observatory}: No hay datos para ${dateStr}`);
                 }
-
+                
                 // Retroceder un día
                 targetDate.setDate(targetDate.getDate() - 1);
                 attempts++;
             }
-
-            throw new Error('No hay datos disponibles en los últimos 3 días');
+            
+            throw new Error(`No hay datos disponibles en los últimos ${maxAttempts} días`);
             
         } catch (error) {
             console.error(`Error loading ${observatory} data:`, error);
@@ -1616,39 +1617,24 @@ const geoMagApp = (function() {
     }
 
     function updateStatistics() {
-        // Validar que existan datos antes de procesarlos
         if (!state.forecastData.kpGFZ || state.forecastData.kpGFZ.length === 0) {
-            // Si no hay datos GFZ, intentar usar otros
-            const alternativeKp = state.forecastData.kpNoaa ||
-                                (state.forecastData.ksaData ? state.forecastData.ksaData.values : []) ||
-                                state.forecastData.hp30 || [];
-
-            if (alternativeKp.length === 0) {
-                console.warn('No hay datos Kp disponibles para estadísticas');
-                return;
-            }
-
-            // Usar datos alternativos
-            state.forecastData.kpGFZ = alternativeKp;
-        }
-
-        const validKpValues = state.forecastData.kpGFZ.filter(v => v !== null && !isNaN(v) && v >= 0 && v <= 9);
-        if (validKpValues.length === 0) {
-            console.warn('No hay valores Kp válidos');
-            document.getElementById('maxKp').textContent = '--';
-            document.getElementById('maxKpTime').textContent = '--';
-            document.getElementById('stormProb').textContent = '0%';
-            document.getElementById('optimalWindow').textContent = '0h';
+            console.warn('No hay datos Kp para estadísticas');
             return;
         }
-
+        
+        const validKpValues = state.forecastData.kpGFZ.filter(v => v !== null && !isNaN(v));
+        if (validKpValues.length === 0) {
+            console.warn('No hay valores Kp válidos');
+            return;
+        }
+        
         const maxKp = Math.max(...validKpValues);
         const maxKpIndex = state.forecastData.kpGFZ.indexOf(maxKp);
         document.getElementById('maxKp').textContent = maxKp.toFixed(1);
         document.getElementById('maxKpTime').textContent = state.forecastData.timestamps[maxKpIndex] || '--';
-
-        if (state.forecastData.ap && state.forecastData.ap.length > 0) {
-            const validApValues = state.forecastData.ap.filter(v => v !== null && !isNaN(v) && v >= 0);
+        
+        if (state.forecastData.ap.length > 0) {
+            const validApValues = state.forecastData.ap.filter(v => v !== null && !isNaN(v));
             if (validApValues.length > 0) {
                 const maxAp = Math.max(...validApValues);
                 const maxApIndex = state.forecastData.ap.indexOf(maxAp);
@@ -1656,10 +1642,10 @@ const geoMagApp = (function() {
                 document.getElementById('maxApTime').textContent = state.forecastData.timestamps[maxApIndex] || '--';
             }
         }
-
+        
         const stormProb = calculateStormProbability();
         document.getElementById('stormProb').textContent = `${stormProb.toFixed(0)}%`;
-
+        
         const optimalHours = validKpValues.filter(kp => kp * state.forecastData.samaFactor < 4).length;
         document.getElementById('optimalWindow').textContent = `${optimalHours}h`;
         document.getElementById('optimalHours').textContent = `de ${state.forecastData.timestamps.length}h totales`;
@@ -1805,21 +1791,21 @@ const geoMagApp = (function() {
         return Math.min(100, probability);
     }
 
-    // Mostrar mensaje de carga en el panel de estado
-    function showLoadingMessage(message) {
-        const statusElement = document.getElementById('systemStatus');
-        if (statusElement) {
-            statusElement.textContent = message;
-        }
-    }
-
     // ================== FUNCIONES PÚBLICAS ==================
-
+    
     async function refreshData() {
         document.getElementById('chartLoading').style.display = 'flex';
-        showLoadingMessage('Conectando con fuentes de datos...');
+        document.getElementById('systemStatus').textContent = 'Conectando con fuentes...';
         
         try {
+            // Actualizar estado mientras carga
+            setTimeout(() => {
+                const status = document.getElementById('systemStatus');
+                if (status.textContent === 'Conectando con fuentes...') {
+                    status.textContent = 'Cargando datos...';
+                }
+            }, 2000);
+            
             const success = await loadDataHybrid();
             
             if (!success) {
@@ -1957,6 +1943,12 @@ const geoMagApp = (function() {
     function init() {
         console.log('Monitor Geomagnético iniciando...');
         console.log('Configuración: Multi-índices GFZ con análisis SAMA mejorado');
+        
+        // Mostrar fecha del sistema
+        const systemDateElement = document.getElementById('systemDate');
+        if (systemDateElement) {
+            systemDateElement.textContent = SYSTEM_DATE.toLocaleString('es-AR');
+        }
         
         // Inicializar panel de validación
         updateValidationPanel();
