@@ -1201,8 +1201,8 @@ const geoMagApp = (function() {
     const domUpdater = new DOMUpdater();
     const validationPanel = new ValidationPanelUpdater('validationGrid');
 
-    // ================ FIN PARTE 1 ===============
-                   // ==================== PARTE 2: FUNCIONES DE CARGA DE DATOS ====================
+    // ================ FIN PARTE 1 ================
+// ==================== PARTE 2: FUNCIONES DE CARGA DE DATOS ====================
 
     // Función mejorada con múltiples proxies CORS
     async function fetchWithCORS(url, options = {}) {
@@ -1968,8 +1968,7 @@ const geoMagApp = (function() {
         return `${day}/${month} ${hour}h`;
     }
 
-    // ================ FIN PARTE 2 ================
-                   // ==================== PARTE 3: ACTUALIZACIÓN UI E INICIALIZACIÓN ====================
+    // ================ FIN PARTE 2 ================// ==================== PARTE 3: ACTUALIZACIÓN UI E INICIALIZACIÓN ====================
 
     // ================== FUNCIONES DE ACTUALIZACIÓN UI ==================
     
