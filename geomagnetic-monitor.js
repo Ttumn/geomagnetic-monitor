@@ -121,8 +121,9 @@ const geoMagApp = (function() {
         SOURCE_INFO: [
             { id: 'ksa', name: 'KSA EMBRACE', icon: '🇧🇷', priority: 1 },
             { id: 'kpNoaa', name: 'Kp NOAA/SWPC', icon: '🇺🇸', priority: 2 },
-            { id: 'hp30', name: 'HP30 GFZ', icon: '⚡', priority: 3, index: 'Hp30' },
-            { id: 'kpGFZ', name: 'Kp GFZ', icon: '🌍', priority: 4, index: 'Kp' },
+            { id: 'kpPager', name: 'Kp PAGER', icon: '🛰️', priority: 3 },
+            { id: 'hp30', name: 'HP30 GFZ', icon: '⚡', priority: 4, index: 'Hp30' },
+            { id: 'kpGFZ', name: 'Kp GFZ', icon: '🌍', priority: 5, index: 'Kp' },
             { id: 'apGFZ', name: 'ap GFZ', icon: '📊', priority: 5, index: 'ap' },
             { id: 'ap30', name: 'ap30 GFZ', icon: '⏱️', priority: 6, index: 'ap30' },
             { id: 'dst', name: 'DST Kyoto', icon: '🇯🇵', priority: 7 }
@@ -150,6 +151,7 @@ const geoMagApp = (function() {
                     timestamps: [],
                     kpGFZ: [],
                     kpNoaa: [],
+                    kpPager: [],
                     kpStatus: [],
                     ap: [],
                     apStatus: [],
@@ -1513,6 +1515,64 @@ const geoMagApp = (function() {
         }
     }
 
+    // Cargar pronóstico Kp de PAGER
+    async function loadPagerKp() {
+        const source = 'kpPager';
+        const startTime = Date.now();
+
+        await stateManager.updateState({
+            'validationResults.kpPager.status': 'loading'
+        });
+
+        try {
+            const response = await fetchWithCORS(CONFIG.DATA_SOURCES.kpPager, {
+                timeout: CONFIG.SOURCE_TIMEOUTS.kpPager
+            });
+            const data = await response.json();
+
+            if (!data || !data.median) {
+                throw new Error('Formato PAGER inválido');
+            }
+
+            const kpValues = Object.values(data.median).slice(0, 24).map(v => parseFloat(v));
+            const times = Object.values(data['Time (UTC)']).slice(0, 24);
+            const labels = times.map(t => formatLocalLabel(new Date(t + ' UTC')));
+
+            const updates = {
+                'forecastData.kpPager': kpValues,
+                'validationResults.kpPager': {
+                    status: 'valid',
+                    confidence: 80,
+                    latency: Date.now() - startTime,
+                    lastUpdate: new Date(),
+                    dataPoints: kpValues.length
+                }
+            };
+
+            const current = stateManager.getState();
+            if (current.forecastData.timestamps.length === 0) {
+                updates['forecastData.timestamps'] = labels;
+            }
+
+            await stateManager.updateState(updates);
+            console.log(`PAGER Kp cargado: ${kpValues.length} valores`);
+
+            return kpValues;
+
+        } catch (error) {
+            console.error('Error loading PAGER Kp:', error);
+            await stateManager.updateState({
+                'validationResults.kpPager': {
+                    status: error.message.includes('Timeout') ? 'timeout' : 'error',
+                    confidence: 0,
+                    error: error.message,
+                    latency: Date.now() - startTime
+                }
+            });
+            return null;
+        }
+    }
+
     // Parser robusto para datos DST
     async function loadCurrentDst() {
         const source = 'dst';
@@ -1798,14 +1858,15 @@ const geoMagApp = (function() {
             const promises = [
                 loadKsaIndex(),
                 loadNoaaKp(),
+                loadPagerKp(),
                 loadCurrentDst()
             ];
             
             const results = await Promise.allSettled(promises);
-            
+
             let successCount = 0;
             const updates = {};
-            
+
             if (results[0].status === 'fulfilled' && results[0].value) {
                 updates['forecastData.ksaData'] = results[0].value;
                 updates['forecastData.ksaIndex'] = results[0].value.values[results[0].value.values.length - 1];
@@ -1814,7 +1875,7 @@ const geoMagApp = (function() {
             } else {
                 console.error('Error cargando KSA:', results[0].reason);
             }
-            
+
             if (results[1].status === 'fulfilled' && results[1].value) {
                 const noaaKp = results[1].value;
                 console.log('NOAA Kp cargado:', noaaKp.length, 'valores');
@@ -1823,13 +1884,21 @@ const geoMagApp = (function() {
             } else {
                 console.error('Error cargando NOAA Kp:', results[1].reason);
             }
-            
-            if (results[2].status === 'fulfilled' && results[2].value !== null) {
-                updates['forecastData.dstCurrent'] = results[2].value;
+
+            if (results[2].status === 'fulfilled' && results[2].value) {
+                updates['forecastData.kpPager'] = results[2].value;
+                console.log('PAGER cargado:', results[2].value.length, 'valores');
+                successCount++;
+            } else {
+                console.error('Error cargando PAGER:', results[2].reason);
+            }
+
+            if (results[3].status === 'fulfilled' && results[3].value !== null) {
+                updates['forecastData.dstCurrent'] = results[3].value;
                 console.log('DST actual:', updates['forecastData.dstCurrent']);
                 successCount++;
             } else {
-                console.error('Error cargando DST:', results[2].reason);
+                console.error('Error cargando DST:', results[3].reason);
             }
             
 
@@ -1864,7 +1933,7 @@ const geoMagApp = (function() {
                 }
             }
             
-            console.log('Carga legacy completada:', successCount, 'de 3 fuentes exitosas');
+            console.log('Carga legacy completada:', successCount, 'de 4 fuentes exitosas');
             return successCount > 0;
             
         } catch (error) {
@@ -1913,6 +1982,7 @@ const geoMagApp = (function() {
         console.log('Datos disponibles:', {
             ksaIndex: finalState.forecastData.ksaIndex,
             kpNoaa: finalState.forecastData.kpNoaa.length,
+            kpPager: finalState.forecastData.kpPager.length,
             hp30: finalState.forecastData.hp30.length,
             kpGFZ: finalState.forecastData.kpGFZ.length,
             timestamps: finalState.forecastData.timestamps.length
@@ -2034,7 +2104,7 @@ const geoMagApp = (function() {
         }
         
         // Kp NOAA (Prioridad 2)
-        if (state.forecastData.kpNoaa.length > 0 && (!state.forecastData.ksaData || state.currentDataSource === 'legacy')) {
+        if (state.forecastData.kpNoaa.length > 0) {
             datasets.push({
                 label: 'Kp NOAA (Prioridad 2)',
                 data: state.forecastData.kpNoaa,
@@ -2048,11 +2118,27 @@ const geoMagApp = (function() {
                 order: 2
             });
         }
-        
-        // HP30 GFZ (Prioridad 3)
+
+        // Kp PAGER (Prioridad 3)
+        if (state.forecastData.kpPager.length > 0) {
+            datasets.push({
+                label: 'Kp PAGER (Prioridad 3)',
+                data: state.forecastData.kpPager,
+                borderColor: '#38bdf8',
+                backgroundColor: 'rgba(56, 189, 248, 0.1)',
+                borderWidth: 3,
+                borderDash: [6, 3],
+                tension: 0.4,
+                pointRadius: 3,
+                pointBackgroundColor: '#38bdf8',
+                yAxisID: 'y-kp',
+                order: 3
+            });
+        }
+        // HP30 GFZ (Prioridad 4)
         if (state.forecastData.hp30.length > 0 && state.currentDataSource !== 'legacy') {
             datasets.push({
-                label: 'HP30 GFZ (Prioridad 3)',
+                label: 'HP30 GFZ (Prioridad 4)',
                 data: state.forecastData.hp30,
                 borderColor: '#3b82f6',
                 borderWidth: 2,
@@ -2060,15 +2146,13 @@ const geoMagApp = (function() {
                 tension: 0.4,
                 pointRadius: 2,
                 yAxisID: 'y-kp',
-                order: 3
+                order: 4
             });
         }
-        
-        // Kp GFZ (Prioridad 4)
-        if (state.forecastData.kpGFZ.length > 0 && state.currentDataSource !== 'legacy' && 
-            !state.forecastData.ksaData && state.forecastData.kpNoaa.length === 0) {
+        // Kp GFZ (Prioridad 5)
+        if (state.forecastData.kpGFZ.length > 0 && state.currentDataSource !== 'legacy') {
             datasets.push({
-                label: 'Kp GFZ (Prioridad 4)',
+                label: 'Kp GFZ (Prioridad 5)',
                 data: state.forecastData.kpGFZ,
                 borderColor: '#8b5cf6',
                 backgroundColor: 'rgba(139, 92, 246, 0.1)',
@@ -2078,14 +2162,15 @@ const geoMagApp = (function() {
                 pointRadius: 3,
                 pointBackgroundColor: '#8b5cf6',
                 yAxisID: 'y-kp',
-                order: 4
+                order: 5
             });
         }
         
         
         // Kp Efectivo SAMA
-        const kpBase = state.forecastData.ksaData?.values || state.forecastData.kpNoaa || 
-                      state.forecastData.hp30 || state.forecastData.kpGFZ;
+        const kpBase = state.forecastData.ksaData?.values || state.forecastData.kpNoaa ||
+                      state.forecastData.kpPager || state.forecastData.hp30 ||
+                      state.forecastData.kpGFZ;
         if (kpBase && kpBase.length > 0) {
             const kpSAMA = kpBase.map(kp => kp ? kp * state.forecastData.samaFactor : null);
             const kpLower = kpSAMA.map(v => v !== null ? v - 0.5 : null);
